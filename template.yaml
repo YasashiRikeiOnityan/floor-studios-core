@@ -1,0 +1,339 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Floor Studios Core
+
+# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
+Globals:
+  Function:
+    Timeout: 3
+    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
+    LoggingConfig:
+      LogFormat: JSON
+
+Parameters:
+  # プロジェクト名
+  ProjectName:
+    Type: String
+    Default: floor-studios
+  # プロジェクトタイプ
+  ProjectType:
+    Type: String
+    Default: core
+  # 環境
+  Environment:
+    Type: String
+    Default: main
+  # ドメイン名
+  DomainName:
+    Type: String
+    Default: floor-studios.com
+  # ホストゾーンID
+  HostedZoneId:
+    Type: String
+    Default: Z00033452JLLJGRAM0F3Y
+
+Resources:
+  # API用の証明書の定義
+  ApiCertificate:
+    Type: AWS::CertificateManager::Certificate
+    Properties:
+      DomainName: !Sub "*.api.${DomainName}"
+      DomainValidationOptions:
+        - DomainName: !Sub "*.api.${DomainName}"
+          HostedZoneId: !Ref HostedZoneId
+      KeyAlgorithm: RSA_2048
+      ValidationMethod: DNS
+      CertificateTransparencyLoggingPreference: ENABLED
+  # Cognito User Poolの定義
+  CognitoUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub userpool-${ProjectName}-${ProjectType}-${Environment}
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      AutoVerifiedAttributes:
+        - email
+      # メールアドレスをユーザー名として使用する
+      UsernameAttributes:
+        - email
+      # ユーザー名の大文字小文字を区別しない
+      UsernameConfiguration:
+        CaseSensitive: false
+      # Cognitoのデフォルトメール送信を使用する
+      EmailConfiguration:
+        EmailSendingAccount: COGNITO_DEFAULT
+      # メールアドレスを使用してアカウントを確認する
+      VerificationMessageTemplate:
+        DefaultEmailOption: CONFIRM_WITH_CODE
+        EmailSubject: "Floor Studios - Email Verification"
+        EmailMessage: |
+          Verification Code: {####}
+
+          Please enter this code to verify your email address.
+
+          This code is valid for 10 minutes.
+      # ユーザー属性の定義
+      Schema:
+        - Name: email
+          AttributeDataType: String
+          Mutable: true
+          Required: true
+        - Name: tenant_id
+          AttributeDataType: String
+          Mutable: true
+          Required: false
+      Policies:
+        # パスワードポリシーの定義
+        PasswordPolicy:
+          MinimumLength: 6
+          RequireLowercase: false
+          RequireNumbers: false
+          RequireSymbols: false
+          RequireUppercase: false
+          TemporaryPasswordValidityDays: 7
+      LambdaConfig:
+        PostConfirmation: !GetAtt UserRegistrationFunction.Arn
+  # Cognito User Pool Clientの定義
+  CognitoUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      UserPoolId: !Ref CognitoUserPool
+      ClientName: !Sub userpool-client-${ProjectName}-${ProjectType}-${Environment}
+      GenerateSecret: false
+      PreventUserExistenceErrors: ENABLED
+      ExplicitAuthFlows:
+        - ALLOW_ADMIN_USER_PASSWORD_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+  # Cognito Identity Poolの定義
+  CognitoIdentityPool:
+    Type: AWS::Cognito::IdentityPool
+    Properties:
+      IdentityPoolName: !Sub identitypool-${ProjectName}-${ProjectType}-${Environment}
+      AllowUnauthenticatedIdentities: false
+      CognitoIdentityProviders:
+        - ProviderName: !Sub "cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
+          ClientId: !Ref CognitoUserPoolClient
+  # Cognito Identity PoolのIAMロールの定義
+  CognitoIdentityPoolRole:
+    Type: AWS::Cognito::IdentityPoolRoleAttachment
+    Properties:
+      IdentityPoolId: !Ref CognitoIdentityPool
+      Roles:
+        authenticated: !GetAtt CognitoAuthRole.Arn
+        unauthenticated: !GetAtt CognitoUnauthRole.Arn
+  # 認証済みユーザー用のIAMロール
+  CognitoAuthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref CognitoIdentityPool
+              ForAnyValue:StringLike:
+                "cognito-identity.amazonaws.com:amr": authenticated
+      Policies:
+        - PolicyName: CognitoAuthorizedPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${S3BucketStaticAssets}/${CognitoUserPoolClient}:tenant_id/*"
+  # 未認証ユーザー用のIAMロール
+  CognitoUnauthRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: cognito-identity.amazonaws.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                "cognito-identity.amazonaws.com:aud": !Ref CognitoIdentityPool
+              ForAnyValue:StringLike:
+                "cognito-identity.amazonaws.com:amr": unauthenticated
+      Policies:
+        - PolicyName: CognitoUnauthorizedPolicy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub "arn:aws:s3:::${S3BucketStaticAssets}/public/*"
+  # 画像ファイルをテナントごとに保存するためのS3バケット
+  S3BucketStaticAssets:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub ${ProjectName}-${ProjectType}-${Environment}-static-assets
+  # Cognitoトリガー用Lambda関数
+  UserRegistrationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/common/user_registration/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          TENANTS_TABLE_NAME: !Ref TenantsTable
+          USERS_TABLE_NAME: !Ref UsersTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref TenantsTable
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UsersTable
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - cognito-idp:AdminUpdateUserAttributes
+              # 循環定義にならないように広い範囲で指定する（微妙...)
+              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*"
+  # Lambda関数のIAM権限追加
+  UserRegistrationFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref UserRegistrationFunction
+      Principal: cognito-idp.amazonaws.com
+      SourceArn: !GetAtt CognitoUserPool.Arn
+  # API定義を追加
+  FloorStudiosApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub api-${ProjectName}-${ProjectType}-${Environment}
+      StageName: !Ref Environment
+      Domain:
+        DomainName: !Sub "${Environment}.api.${DomainName}"
+        CertificateArn: !Ref ApiCertificate
+        EndpointConfiguration: REGIONAL
+        Route53:
+          HostedZoneId: !Ref HostedZoneId
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,Authorization'"
+        AllowOrigin: "'*'"
+      Auth:
+        DefaultAuthorizer: CognitoAuthorizer
+        Authorizers:
+          CognitoAuthorizer:
+            UserPoolArn: !GetAtt CognitoUserPool.Arn
+      GatewayResponses:
+        DEFAULT_4XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+        DEFAULT_5XX:
+          ResponseParameters:
+            Headers:
+              Access-Control-Allow-Origin: "'*'"
+  GetUserFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: src/api/GetUsersUserId/
+      Handler: get.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          USERS_TABLE_NAME: !Ref UsersTable
+          TENANTS_TABLE_NAME: !Ref TenantsTable
+      Policies:
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref TenantsTable
+      Events:
+        GetUser:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/users/{user_id}
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+  # UpdateUserFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     CodeUri: src/api/GetUsersUserId/
+  #     Handler: put.lambda_handler
+  #     Runtime: python3.13
+  #     Architectures:
+  #       - x86_64
+  #     Environment:
+  #       Variables:
+  #         USERS_TABLE_NAME: !Ref UsersTable
+  #     Policies:
+  #       - DynamoDBCrudPolicy:
+  #           TableName: !Ref UsersTable
+  #     Events:
+  #       UpdateUser:
+  #         Type: Api
+  #         Properties:
+  #           RestApiId: !Ref FloorStudiosApi
+  #           Path: /v1/users/{user_id}
+  #           Method: put
+  #           Auth:
+  #             Authorizer: CognitoAuthorizer
+  # DynamoDBテーブルの定義
+  TenantsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub table-${ProjectName}-${ProjectType}-${Environment}-tenants
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: tenant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: tenant_id
+          KeyType: HASH
+  UsersTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub table-${ProjectName}-${ProjectType}-${Environment}-users
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: user_id
+          AttributeType: S
+        - AttributeName: tenant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: tenant_id
+          KeyType: RANGE
+
+Outputs:
+  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
+  # Find out more about other implicit resources you can reference within SAM
+  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref CognitoUserPool
+  UserPoolClientId:
+    Description: Cognito User Pool Client ID
+    Value: !Ref CognitoUserPoolClient
+  ApiEndpoint:
+    Description: API Gateway endpoint URL with custom domain
+    Value: !Sub "https://${Environment}.api.${DomainName}/v1/hello"
+  ApiCertificateArn:
+    Description: ACM Certificate ARN for API domain
+    Value: !Ref ApiCertificate
+  UsersTableName:
+    Description: DynamoDB User Table Name
+    Value: !Ref UsersTable
