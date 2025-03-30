@@ -11,20 +11,31 @@ def lambda_handler(event, context):
     # CORSヘッダーを定義
     headers = {
         "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token",
-        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "Access-Control-Allow-Credentials": "true"
+        "Access-Control-Allow-Origin": "*"
     }
 
     try:
         # パスパラメータからuser_idを取得
         user_id = event["pathParameters"]["user_id"]
 
+        # tenant_idを取得
+        tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
+
+        # tenant_idが存在しない場合は400エラーを返す
+        if not tenant_id:
+            return {
+                "statusCode": 400,
+                "headers": headers,
+                "body": json.dumps({
+                    "message": "tenant_id is required"
+                })
+            }
+
         # ユーザー情報を取得
         response = users_table.get_item(
             Key={
-                "user_id": user_id
+                "user_id": user_id,
+                "tenant_id": tenant_id
             }
         )
 

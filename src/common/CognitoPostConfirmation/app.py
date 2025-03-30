@@ -38,7 +38,6 @@ def lambda_handler(event, context):
             tenants_table.put_item(
                 Item={
                     "tenant_id": tenant_id,
-                    "created_at": event["request"]["userAttributes"]["cognito:user_status"],
                     "status": "active"
                 }
             )
@@ -53,15 +52,13 @@ def lambda_handler(event, context):
                     "user_id": user_id,
                     "tenant_id": tenant_id,
                     "email": email,
-                    "status": "active",
-                    "registered_at": event["request"]["userAttributes"]["cognito:user_status"]
                 }
             )
         except ClientError as e:
             print(f"Error saving user: {str(e)}")
             raise e
 
-        # 重要: イベントをそのまま返す
+        # イベントをそのまま返す
         return event
 
     except Exception as e:
