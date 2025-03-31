@@ -225,22 +225,29 @@ Resources:
           HostedZoneId: !Ref HostedZoneId
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,Authorization'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin,Access-Control-Allow-Headers,Access-Control-Allow-Methods'"
         AllowOrigin: "'*'"
       Auth:
         DefaultAuthorizer: CognitoAuthorizer
         Authorizers:
           CognitoAuthorizer:
             UserPoolArn: !GetAtt CognitoUserPool.Arn
+        # OPTIONSリクエストにデフォルトのAuthorizerを追加しない
+        AddDefaultAuthorizerToCorsPreflight: false
       GatewayResponses:
         DEFAULT_4XX:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin,Access-Control-Allow-Headers,Access-Control-Allow-Methods'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
         DEFAULT_5XX:
           ResponseParameters:
             Headers:
               Access-Control-Allow-Origin: "'*'"
+              Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin,Access-Control-Allow-Headers,Access-Control-Allow-Methods'"
+              Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
+
   GetUsersFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -256,7 +263,7 @@ Resources:
         - DynamoDBReadPolicy:
             TableName: !Ref UsersTable
       Events:
-        GetUser:
+        GetUsers:
           Type: Api
           Properties:
             RestApiId: !Ref FloorStudiosApi
@@ -264,26 +271,7 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-        Preflight:
-          Type: Api
-          Properties:
-            RestApiId: !Ref FloorStudiosApi
-            Path: /v1/users
-            Method: options
-            Integration: Mock
-            ResponseParameters:
-              Method:
-                ResponseParameters:
-                  method.response.header.Access-Control-Allow-Origin: "'*'"
-                  method.response.header.Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
-                  method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization'"
-            RequestTemplates:
-              application/json: '{"statusCode": 200}'
-            MethodResponses:
-              - StatusCode: 200
-                ResponseParameters:
-                  method.response.header.Access-Control-Allow-Origin: true
-                  method.response.header.Access-Control-Allow-Methods: true
+
   GetUsersUserIdFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -302,7 +290,7 @@ Resources:
         - DynamoDBReadPolicy:
             TableName: !Ref TenantsTable
       Events:
-        GetUser:
+        GetUsersUserId:
           Type: Api
           Properties:
             RestApiId: !Ref FloorStudiosApi
@@ -310,29 +298,7 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
-  # UpdateUserFunction:
-  #   Type: AWS::Serverless::Function
-  #   Properties:
-  #     CodeUri: src/api/GetUsersUserId/
-  #     Handler: put.lambda_handler
-  #     Runtime: python3.13
-  #     Architectures:
-  #       - x86_64
-  #     Environment:
-  #       Variables:
-  #         USERS_TABLE_NAME: !Ref UsersTable
-  #     Policies:
-  #       - DynamoDBCrudPolicy:
-  #           TableName: !Ref UsersTable
-  #     Events:
-  #       UpdateUser:
-  #         Type: Api
-  #         Properties:
-  #           RestApiId: !Ref FloorStudiosApi
-  #           Path: /v1/users/{user_id}
-  #           Method: put
-  #           Auth:
-  #             Authorizer: CognitoAuthorizer
+
   # DynamoDBテーブルの定義
   TenantsTable:
     Type: AWS::DynamoDB::Table
@@ -362,21 +328,9 @@ Resources:
           KeyType: RANGE
 
 Outputs:
-  # ServerlessRestApi is an implicit API created out of Events key under Serverless::Function
-  # Find out more about other implicit resources you can reference within SAM
-  # https://github.com/awslabs/serverless-application-model/blob/master/docs/internals/generated_resources.rst#api
   UserPoolId:
     Description: Cognito User Pool ID
     Value: !Ref CognitoUserPool
   UserPoolClientId:
     Description: Cognito User Pool Client ID
     Value: !Ref CognitoUserPoolClient
-  ApiEndpoint:
-    Description: API Gateway endpoint URL with custom domain
-    Value: !Sub "https://${Environment}.api.${DomainName}/v1/hello"
-  ApiCertificateArn:
-    Description: ACM Certificate ARN for API domain
-    Value: !Ref ApiCertificate
-  UsersTableName:
-    Description: DynamoDB User Table Name
-    Value: !Ref UsersTable

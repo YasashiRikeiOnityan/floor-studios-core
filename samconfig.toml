@@ -16,8 +16,8 @@ lint = true
 capabilities = "CAPABILITY_IAM"
 confirm_changeset = true
 resolve_s3 = true
-stack_name = "stack-floor-studios-core"
-s3_prefix = "stack-floor-studios-core"
+stack_name = "stack-floor-studios-core-main-serverless"
+s3_prefix = "stack-floor-studios-core-main-serverless"
 region = "ap-northeast-1"
 image_repositories = []
 parameter_overrides = "ProjectName=\"floor-studios\" ProjectType=\"core\" Environment=\"main\" DomainName=\"floor-studios.com\" HostedZoneId=\"Z00033452JLLJGRAM0F3Y\""

@@ -7,7 +7,6 @@ users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
 
 
 def lambda_handler(event, context):
-    # CORSヘッダーを定義
     headers = {
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*"
