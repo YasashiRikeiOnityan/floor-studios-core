@@ -33,7 +33,9 @@ Parameters:
     Default: Z00033452JLLJGRAM0F3Y
 
 Resources:
+  #########################################################
   # API用の証明書の定義
+  #########################################################
   ApiCertificate:
     Type: AWS::CertificateManager::Certificate
     Properties:
@@ -44,7 +46,10 @@ Resources:
       KeyAlgorithm: RSA_2048
       ValidationMethod: DNS
       CertificateTransparencyLoggingPreference: ENABLED
-  # Cognito User Poolの定義
+
+  #########################################################
+  # Cognito UserPoolの定義
+  #########################################################
   CognitoUserPool:
     Type: AWS::Cognito::UserPool
     Properties:
@@ -93,7 +98,10 @@ Resources:
           TemporaryPasswordValidityDays: 7
       LambdaConfig:
         PostConfirmation: !GetAtt CognitoPostConfirmation.Arn
-  # Cognito User Pool Clientの定義
+
+  #########################################################
+  # Cognito UserPool Clientの定義
+  #########################################################
   CognitoUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
@@ -106,7 +114,10 @@ Resources:
         - ALLOW_USER_PASSWORD_AUTH
         - ALLOW_USER_SRP_AUTH
         - ALLOW_REFRESH_TOKEN_AUTH
+
+  #########################################################
   # Cognito Identity Poolの定義
+  #########################################################
   CognitoIdentityPool:
     Type: AWS::Cognito::IdentityPool
     Properties:
@@ -115,7 +126,10 @@ Resources:
       CognitoIdentityProviders:
         - ProviderName: !Sub "cognito-idp.${AWS::Region}.amazonaws.com/${CognitoUserPool}"
           ClientId: !Ref CognitoUserPoolClient
+  
+  #########################################################
   # Cognito Identity PoolのIAMロールの定義
+  #########################################################
   CognitoIdentityPoolRole:
     Type: AWS::Cognito::IdentityPoolRoleAttachment
     Properties:
@@ -123,10 +137,14 @@ Resources:
       Roles:
         authenticated: !GetAtt CognitoAuthRole.Arn
         unauthenticated: !GetAtt CognitoUnauthRole.Arn
+  
+  #########################################################
   # 認証済みユーザー用のIAMロール
+  #########################################################
   CognitoAuthRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-cognito-auth
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -147,11 +165,16 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${S3BucketStaticAssets}/${CognitoUserPoolClient}:tenant_id/*"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketStaticAssets}/${CognitoUserPoolClient}:tenant_id/*"
+
+  ######################################################### 
   # 未認証ユーザー用のIAMロール
+  # 使用する意図はないが用意しておく
+  #########################################################
   CognitoUnauthRole:
     Type: AWS::IAM::Role
     Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-cognito-unauth
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -169,19 +192,26 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
-              - Effect: Allow
+              - Effect: Allow 
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:aws:s3:::${S3BucketStaticAssets}/public/*"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketStaticAssets}/public/*"
+
+  #########################################################
   # 画像ファイルをテナントごとに保存するためのS3バケット
+  #########################################################
   S3BucketStaticAssets:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub ${ProjectName}-${ProjectType}-${Environment}-static-assets
+
+  #########################################################
   # Cognitoトリガー用Lambda関数
+  #########################################################
   CognitoPostConfirmation:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-cognito-post-confirmation
       CodeUri: src/common/CognitoPostConfirmation/
       Handler: app.lambda_handler
       Runtime: python3.13
@@ -203,7 +233,10 @@ Resources:
                 - cognito-idp:AdminUpdateUserAttributes
               # 循環定義にならないように広い範囲で指定する（微妙...)
               Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*"
-  # Lambda関数のIAM権限
+  
+  #########################################################
+  # CognitoにLambda関数の呼び出し権限を付与
+  #########################################################
   CognitoPostConfirmationPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -211,7 +244,10 @@ Resources:
       FunctionName: !Ref CognitoPostConfirmation
       Principal: cognito-idp.amazonaws.com
       SourceArn: !GetAtt CognitoUserPool.Arn
+
+  #########################################################
   # API定義
+  #########################################################
   FloorStudiosApi:
     Type: AWS::Serverless::Api
     Properties:
@@ -248,9 +284,13 @@ Resources:
               Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token,Access-Control-Allow-Origin,Access-Control-Allow-Headers,Access-Control-Allow-Methods'"
               Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
-  GetUsersFunction:
+  #########################################################
+  # users Lambda関数の定義
+  #########################################################
+  UsersFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-users
       CodeUri: src/api/GetUsers/
       Handler: get.lambda_handler
       Runtime: python3.13
@@ -272,9 +312,13 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
-  GetUsersUserIdFunction:
+  #########################################################
+  # users/{userId} Lambda関数の定義 
+  #########################################################
+  UsersUserIdFunction:
     Type: AWS::Serverless::Function
     Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
       CodeUri: src/api/GetUsersUserId/
       Handler: get.lambda_handler
       Runtime: python3.13
@@ -283,12 +327,9 @@ Resources:
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
-          TENANTS_TABLE_NAME: !Ref TenantsTable
       Policies:
         - DynamoDBReadPolicy:
             TableName: !Ref UsersTable
-        - DynamoDBReadPolicy:
-            TableName: !Ref TenantsTable
       Events:
         GetUsersUserId:
           Type: Api
@@ -299,7 +340,9 @@ Resources:
             Auth:
               Authorizer: CognitoAuthorizer
 
-  # DynamoDBテーブルの定義
+  #########################################################
+  # Tenantsテーブルの定義
+  #########################################################
   TenantsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -311,6 +354,10 @@ Resources:
       KeySchema:
         - AttributeName: tenant_id
           KeyType: HASH
+
+  #########################################################
+  # Usersテーブルの定義
+  #########################################################
   UsersTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -326,6 +373,14 @@ Resources:
           KeyType: HASH
         - AttributeName: tenant_id
           KeyType: RANGE
+      # テナントIDで検索するためのGSI
+      GlobalSecondaryIndexes:
+        - IndexName: TenantIdIndex
+          KeySchema:
+            - AttributeName: tenant_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
 
 Outputs:
   UserPoolId:

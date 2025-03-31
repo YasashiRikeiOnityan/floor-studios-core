@@ -16,7 +16,7 @@ architecture = "x86_64"
 handler = "get.lambda_handler"
 manifest_hash = ""
 packagetype = "Zip"
-functions = ["GetUsersFunction"]
+functions = ["UsersFunction"]
 
 [function_build_definitions.0cd45181-6394-4443-b4a0-acb75f90645e]
 codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/GetUsersUserId"
@@ -25,6 +25,6 @@ architecture = "x86_64"
 handler = "get.lambda_handler"
 manifest_hash = "d41d8cd98f00b204e9800998ecf8427e"
 packagetype = "Zip"
-functions = ["GetUsersUserIdFunction"]
+functions = ["UsersUserIdFunction"]
 
 [layer_build_definitions]

@@ -3,7 +3,10 @@ import json
 import boto3
 from botocore.exceptions import ClientError
 
+# AWSリソース
 dynamodb = boto3.resource("dynamodb")
+
+# 環境変数
 users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
 
 
@@ -17,6 +20,16 @@ def lambda_handler(event, context):
     try:
         # パスパラメータからuser_idを取得
         user_id = event["pathParameters"]["user_id"]
+
+        # user_idが存在しない場合は400エラーを返す
+        if not user_id:
+            return {
+                "statusCode": 400,
+                "headers": headers,
+                "body": json.dumps({
+                    "message": "user_id is required"
+                })
+            }
 
         # tenant_idを取得
         tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")

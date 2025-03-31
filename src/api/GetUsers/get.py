@@ -2,7 +2,10 @@ import os
 import json
 import boto3
 
+# AWSリソース
 dynamodb = boto3.resource("dynamodb")
+
+# 環境変数
 users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
 
 
@@ -23,10 +26,13 @@ def lambda_handler(event, context):
         }
 
     try:
-        # sk:tenant_id でスキャン
-        response = users_table.scan(
-            FilterExpression="sk = :tenant_id",
-            ExpressionAttributeValues={":tenant_id": tenant_id}
+        # tenant_idに一致するユーザーを取得
+        response = users_table.query(
+            IndexName="TenantIdIndex",
+            KeyConditionExpression="tenant_id = :tenant_id",
+            ExpressionAttributeValues={
+                ":tenant_id": tenant_id
+            }
         )
 
         return {
