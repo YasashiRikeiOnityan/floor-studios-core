@@ -9,8 +9,8 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["CognitoPostConfirmation"]
 
-[function_build_definitions.baa1f660-5d9c-4ea4-b7a8-4b99e65d09f6]
-codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/GetUsers"
+[function_build_definitions.4455c4fe-1013-49ae-bdbe-43f2bc962254]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/ApiUsers"
 runtime = "python3.13"
 architecture = "x86_64"
 handler = "get.lambda_handler"
@@ -18,13 +18,22 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["UsersFunction"]
 
-[function_build_definitions.0cd45181-6394-4443-b4a0-acb75f90645e]
-codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/GetUsersUserId"
+[function_build_definitions.8d14f485-d7a8-4a3b-9a27-b8b1251e2647]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/ApiUsersUserId"
 runtime = "python3.13"
 architecture = "x86_64"
-handler = "get.lambda_handler"
-manifest_hash = "d41d8cd98f00b204e9800998ecf8427e"
+handler = "app.lambda_handler"
+manifest_hash = "192c0e6a9571d7bf70c98f3096a39ae7"
 packagetype = "Zip"
 functions = ["UsersUserIdFunction"]
+
+[function_build_definitions.1f11c202-7b34-4d22-b485-dce6c7db561c]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/ApiSpecifications"
+runtime = "python3.13"
+architecture = "x86_64"
+handler = "app.lambda_handler"
+manifest_hash = "192c0e6a9571d7bf70c98f3096a39ae7"
+packagetype = "Zip"
+functions = ["SpecificationsFunction"]
 
 [layer_build_definitions]

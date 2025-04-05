@@ -165,7 +165,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketStaticAssets}/${CognitoUserPoolClient}:tenant_id/*"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketStaticAssets}/*"
 
   ######################################################### 
   # 未認証ユーザー用のIAMロール
@@ -203,7 +203,7 @@ Resources:
   S3BucketStaticAssets:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub ${ProjectName}-${ProjectType}-${Environment}-static-assets
+      BucketName: !Sub bucket-${ProjectName}-${ProjectType}-${Environment}-static-assets
 
   #########################################################
   # Cognitoトリガー用Lambda関数
@@ -291,7 +291,7 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-users
-      CodeUri: src/api/GetUsers/
+      CodeUri: src/api/ApiUsers/
       Handler: get.lambda_handler
       Runtime: python3.13
       Architectures:
@@ -311,6 +311,14 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
+        # PostUsers:
+        #   Type: Api
+        #   Properties:
+        #     RestApiId: !Ref FloorStudiosApi
+        #     Path: /v1/users
+        #     Method: post
+        #     Auth:
+        #       Authorizer: CognitoAuthorizer
 
   #########################################################
   # users/{userId} Lambda関数の定義 
@@ -319,17 +327,20 @@ Resources:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
-      CodeUri: src/api/GetUsersUserId/
-      Handler: get.lambda_handler
+      CodeUri: src/api/ApiUsersUserId/
+      Handler: app.lambda_handler
       Runtime: python3.13
       Architectures:
         - x86_64
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
+          S3_BUCKET_STATIC_ASSETS: !Ref S3BucketStaticAssets
       Policies:
-        - DynamoDBReadPolicy:
+        - DynamoDBCrudPolicy:
             TableName: !Ref UsersTable
+        - S3ReadPolicy:
+            BucketName: !Ref S3BucketStaticAssets
       Events:
         GetUsersUserId:
           Type: Api
@@ -337,6 +348,61 @@ Resources:
             RestApiId: !Ref FloorStudiosApi
             Path: /v1/users/{user_id}
             Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutUsersUserId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/users/{user_id}
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+        # DeleteUsersUserId:
+        #   Type: Api
+        #   Properties:
+        #     RestApiId: !Ref FloorStudiosApi
+        #     Path: /v1/users/{user_id}
+        #     Method: delete
+        #     Auth:
+        #       Authorizer: CognitoAuthorizer
+
+  #########################################################
+  # specifications Lambda関数の定義
+  #########################################################
+  SpecificationsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specifications
+      CodeUri: src/api/ApiSpecifications/
+      Handler: app.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
+          USERS_TABLE_NAME: !Ref UsersTable
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SpecificationsTable
+        - DynamoDBReadPolicy:
+            TableName: !Ref UsersTable
+      Events:
+        GetSpecifications:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostSpecifications:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications
+            Method: post
             Auth:
               Authorizer: CognitoAuthorizer
 
@@ -370,6 +436,33 @@ Resources:
           AttributeType: S
       KeySchema:
         - AttributeName: user_id
+          KeyType: HASH
+        - AttributeName: tenant_id
+          KeyType: RANGE
+      # テナントIDで検索するためのGSI
+      GlobalSecondaryIndexes:
+        - IndexName: TenantIdIndex
+          KeySchema:
+            - AttributeName: tenant_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
+
+  #########################################################
+  # Specificationsテーブルの定義
+  #########################################################
+  SpecificationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub table-${ProjectName}-${ProjectType}-${Environment}-specifications
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: specification_id
+          AttributeType: S
+        - AttributeName: tenant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: specification_id
           KeyType: HASH
         - AttributeName: tenant_id
           KeyType: RANGE

@@ -1,0 +1,119 @@
+openapi: 3.0.1
+info:
+  title: Floor Studios API
+  version: 1.0.0
+components:
+  securitySchemes:
+    CognitoAuthorizer:
+      type: apiKey
+      name: Authorization
+      in: header
+security:
+  - CognitoAuthorizer: []
+paths:
+  /v1/specifications:
+    get:
+      summary: Get specifications
+      security:
+        - CognitoAuthorizer: []
+      responses:
+        '200':
+          description: Specifications retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  specifications:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        specification_id:
+                          type: string
+                        brand_name:
+                          type: string
+                        product_name:
+                          type: string
+                        product_code:
+                          type: string
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message
+    post:
+      summary: Create a new specification
+      security:
+        - CognitoAuthorizer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - brand_name
+              properties:
+                brand_name:
+                  type: string
+                  minLength: 1
+                  maxLength: 20
+                  description: Brand name
+                product_name:
+                  type: string
+                  minLength: 1
+                  maxLength: 20
+                  description: Product name
+                product_code:
+                  type: string
+                  minLength: 1
+                  maxLength: 20
+                  description: Product code
+      responses:
+        '200':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - specification_id
+                properties:
+                  specification_id:
+                    type: string
+        '400':
+          description: Bad Request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message
+        '500':
+          description: Internal Server Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    description: Error message

@@ -1,0 +1,153 @@
+openapi: 3.0.1
+info:
+  title: Floor Studios API
+  version: 1.0.0
+components:
+  securitySchemes:
+    CognitoAuthorizer:
+      type: apiKey
+      name: Authorization
+      in: header
+security:
+  - CognitoAuthorizer: []
+paths:
+  /v1/users/{user_id}:
+    parameters:
+      - name: user_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    get:
+      summary: Get user
+      security:
+        - CognitoAuthorizer: []
+      responses:
+        '200':
+          description: Get success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user_id
+                properties:
+                  user_id:
+                    type: string
+                  tenant_id:
+                    type: string
+                  user_name:
+                    type: string
+                  email:
+                    type: string
+                  image_url:
+                    type: string
+                    format: uri
+                    description: URL to the user's profile image
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+    put:
+      summary: Update user
+      security:
+        - CognitoAuthorizer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_name
+              properties:
+                user_name:
+                  type: string
+                  minLength: 1
+                  maxLength: 20
+                  description: User name
+      responses:
+        '200':
+          description: Update success
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - user_id
+                properties:
+                  user_id:
+                    type: string
+                  user_name:
+                    type: string
+                  image_url:
+                    type: string
+                    format: uri
+                    description: URL to the user's profile image
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+    delete:
+      summary: Delete user
+      security:
+        - CognitoAuthorizer: []
+      responses:
+        '200':
+          description: Delete success
+        '404':
+          description: User not found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
