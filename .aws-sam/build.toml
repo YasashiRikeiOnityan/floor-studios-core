@@ -36,4 +36,13 @@ manifest_hash = "192c0e6a9571d7bf70c98f3096a39ae7"
 packagetype = "Zip"
 functions = ["SpecificationsFunction"]
 
+[function_build_definitions.cd8c9d58-f8b6-4411-a060-ba4417effa88]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/common/CreateSpecification"
+runtime = "python3.13"
+architecture = "x86_64"
+handler = "app.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["CreateSpecificationFunction"]
+
 [layer_build_definitions]

@@ -1,14 +1,19 @@
 AWSTemplateFormatVersion: "2010-09-09"
+
 Transform: AWS::Serverless-2016-10-31
+
 Description: Floor Studios Core
 
-# More info about Globals: https://github.com/awslabs/serverless-application-model/blob/master/docs/globals.rst
 Globals:
   Function:
-    Timeout: 3
-    # You can add LoggingConfig parameters such as the Logformat, Log Group, and SystemLogLevel or ApplicationLogLevel. Learn more here https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html#sam-function-loggingconfig.
+    Timeout: 10
+    Runtime: python3.13
+    Architectures:
+      - x86_64
     LoggingConfig:
+      ApplicationLogLevel: INFO
       LogFormat: JSON
+      SystemLogLevel: INFO
 
 Parameters:
   # プロジェクト名
@@ -165,7 +170,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketStaticAssets}/*"
+                Resource: !Sub "${S3BucketSpecifications.Arn}/*"
 
   ######################################################### 
   # 未認証ユーザー用のIAMロール
@@ -195,15 +200,15 @@ Resources:
               - Effect: Allow 
                 Action:
                   - s3:GetObject
-                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketStaticAssets}/public/*"
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketSpecifications}/public/*"
 
   #########################################################
   # 画像ファイルをテナントごとに保存するためのS3バケット
   #########################################################
-  S3BucketStaticAssets:
+  S3BucketSpecifications:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub bucket-${ProjectName}-${ProjectType}-${Environment}-static-assets
+      BucketName: !Sub bucket-${ProjectName}-${ProjectType}-${Environment}-specifications
 
   #########################################################
   # Cognitoトリガー用Lambda関数
@@ -214,9 +219,6 @@ Resources:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-cognito-post-confirmation
       CodeUri: src/common/CognitoPostConfirmation/
       Handler: app.lambda_handler
-      Runtime: python3.13
-      Architectures:
-        - x86_64
       Environment:
         Variables:
           TENANTS_TABLE_NAME: !Ref TenantsTable
@@ -293,15 +295,10 @@ Resources:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-users
       CodeUri: src/api/ApiUsers/
       Handler: get.lambda_handler
-      Runtime: python3.13
-      Architectures:
-        - x86_64
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
-      Policies:
-        - DynamoDBReadPolicy:
-            TableName: !Ref UsersTable
+      Role: !GetAtt UsersFuctionRole.Arn
       Events:
         GetUsers:
           Type: Api
@@ -320,6 +317,38 @@ Resources:
         #     Auth:
         #       Authorizer: CognitoAuthorizer
 
+  UsersFuctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users
+      RetentionInDays: 14
+  
+  UsersFuctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-users
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-users
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt UsersTable.Arn
+
   #########################################################
   # users/{userId} Lambda関数の定義 
   #########################################################
@@ -329,18 +358,11 @@ Resources:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
       CodeUri: src/api/ApiUsersUserId/
       Handler: app.lambda_handler
-      Runtime: python3.13
-      Architectures:
-        - x86_64
       Environment:
         Variables:
           USERS_TABLE_NAME: !Ref UsersTable
-          S3_BUCKET_STATIC_ASSETS: !Ref S3BucketStaticAssets
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
-        - S3ReadPolicy:
-            BucketName: !Ref S3BucketStaticAssets
+          S3_BUCKET_STATIC_ASSETS: !Ref S3BucketSpecifications
+      Role: !GetAtt UsersUserIdFunctionRole.Arn
       Events:
         GetUsersUserId:
           Type: Api
@@ -367,6 +389,47 @@ Resources:
         #     Auth:
         #       Authorizer: CognitoAuthorizer
 
+  UsersUserIdFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
+      RetentionInDays: 14
+
+  UsersUserIdFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-users-user-id
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-users-user-id
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:PutItem
+                  - dynamodb:DeleteItem
+                Resource: !GetAtt UsersTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !GetAtt S3BucketSpecifications.Arn
+
   #########################################################
   # specifications Lambda関数の定義
   #########################################################
@@ -376,18 +439,12 @@ Resources:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specifications
       CodeUri: src/api/ApiSpecifications/
       Handler: app.lambda_handler
-      Runtime: python3.13
-      Architectures:
-        - x86_64
       Environment:
         Variables:
           SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
           USERS_TABLE_NAME: !Ref UsersTable
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SpecificationsTable
-        - DynamoDBReadPolicy:
-            TableName: !Ref UsersTable
+          CREATE_SPECIFICATION_SQS_QUEUE_URL: !Ref CreateSpecificationSQSQueue
+      Role: !GetAtt SpecificationsFunctionRole.Arn
       Events:
         GetSpecifications:
           Type: Api
@@ -405,6 +462,76 @@ Resources:
             Method: post
             Auth:
               Authorizer: CognitoAuthorizer
+
+  SpecificationsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications
+      RetentionInDays: 14
+
+  SpecificationsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specifications
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specifications
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt SpecificationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt UsersTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt CreateSpecificationSQSQueue.Arn
+
+  CreateSpecificationSQSQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub queue-${ProjectName}-${ProjectType}-${Environment}-create-specification
+
+  CreateSpecificationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-create-specification
+      CodeUri: src/common/CreateSpecification/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
+          SPECIFICATION_BUCKET_NAME: !Ref S3BucketSpecifications
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref SpecificationsTable
+        - S3ReadPolicy:
+            BucketName: !Ref S3BucketSpecifications
+        - S3WritePolicy:
+            BucketName: !Ref S3BucketSpecifications
+      Events:
+        CreateSpecification:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt CreateSpecificationSQSQueue.Arn
+            BatchSize: 1
 
   #########################################################
   # Tenantsテーブルの定義
@@ -459,10 +586,40 @@ Resources:
       AttributeDefinitions:
         - AttributeName: specification_id
           AttributeType: S
-        - AttributeName: tenant_id
+        - AttributeName: tenant_id#status
+          AttributeType: S
+        - AttributeName: specification_group_id
           AttributeType: S
       KeySchema:
         - AttributeName: specification_id
+          KeyType: HASH
+        - AttributeName: tenant_id#status
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: SpecificationGroupIdIndex
+          KeySchema:
+            - AttributeName: specification_group_id
+              KeyType: HASH
+            - AttributeName: tenant_id#status
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+
+  #########################################################
+  # SpecificationGroupsテーブルの定義
+  #########################################################
+  SpecificationGroupsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub table-${ProjectName}-${ProjectType}-${Environment}-specification-groups
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: specification_group_id
+          AttributeType: S
+        - AttributeName: tenant_id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: specification_group_id
           KeyType: HASH
         - AttributeName: tenant_id
           KeyType: RANGE

@@ -6,12 +6,20 @@ from botocore.exceptions import ClientError
 from jsonschema import validate, ValidationError
 import uuid
 from datetime import datetime
+import logging
+
 # AWSリソース
 dynamodb = boto3.resource("dynamodb")
+sqs = boto3.client("sqs")
 
 # 環境変数
 specifications_table = dynamodb.Table(os.environ["SPECIFICATIONS_TABLE_NAME"])
 users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
+create_specification_sqs_queue_url = os.environ["CREATE_SPECIFICATION_SQS_QUEUE_URL"]
+
+# ログの設定
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
 
 # スキーマの読み込み
 def load_schema():
@@ -26,6 +34,7 @@ response_schema = load_schema()["responses"]["200"]["content"]["application/json
 
 
 def lambda_handler(event, context):
+    logger.info(event)
     # CORSヘッダーを定義
     headers = {
         "Content-Type": "application/json",
@@ -37,6 +46,7 @@ def lambda_handler(event, context):
         tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
 
         if not tenant_id:
+            logger.error("tenant_id is required")
             return {
                 "statusCode": 400,
                 "headers": headers,
@@ -45,11 +55,12 @@ def lambda_handler(event, context):
 
         # リクエストボディをJSONとしてパース
         body = json.loads(event.get("body", "{}"))
-
+        logger.info(body)
         # スキーマバリデーション
         try:
             validate(instance=body, schema=request_schema)
         except ValidationError:
+            logger.error("Invalid request body")
             return {
                 "statusCode": 400,
                 "headers": headers,
@@ -65,6 +76,7 @@ def lambda_handler(event, context):
         response_user_data = users_table.get_item(Key={"tenant_id": tenant_id, "user_id": request_user_id})
 
         if "Item" not in response_user_data:
+            logger.error("User not found")
             return {
                 "statusCode": 400,
                 "headers": headers,
@@ -75,23 +87,61 @@ def lambda_handler(event, context):
         request_user_name = response_user_data.get("Item", {}).get("user_name")
 
         # テーブルにデータを挿入
-        specifications_table.put_item(
+        response_specifications_table = specifications_table.put_item(
             Item={
-                "tenant_id": tenant_id,
+                # PK
                 "specification_id": specification_id,
+                # SK, GSISK
+                # TODO: tenant_id#statusを生成する関数は共通化する。
+                "tenant_id#status": tenant_id + "#" + "DRAFT",
+                # GSIPK
+                "specification_group_id": "NO_GROUP",
                 "brand_name": body["brand_name"],
                 "product_name": body["product_name"],
                 "product_code": body["product_code"],
                 "status": "DRAFT",
-                "created_by": {
+                "updated_by": {
                     "user_id": request_user_id,
                     "user_name": request_user_name
                 },
-                "created_at": datetime.now().isoformat(),
-                "updated_at": datetime.now().isoformat()
+                "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
             }
         )
 
+        if response_specifications_table.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
+            logger.error("Failed to insert data into specifications table")
+            return {
+                "statusCode": 500,
+                "headers": headers,
+                "body": json.dumps({"message": "Internal server error"})
+            }
+        
+        # キューにメッセージを送信
+        response_sqs = sqs.send_message(
+            QueueUrl=create_specification_sqs_queue_url,
+            MessageBody=json.dumps({
+                "specification_id": specification_id,
+                "tenant_id": tenant_id
+            }),
+            MessageAttributes={
+                "specification_id": {
+                    "DataType": "String",
+                    "StringValue": specification_id
+                },
+                "tenant_id": {
+                    "DataType": "String",
+                    "StringValue": tenant_id
+                }
+            }
+        )
+
+        if response_sqs.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
+            logger.error("Failed to send message to create specification sqs queue")
+            return {
+                "statusCode": 500,
+                "headers": headers,
+                "body": json.dumps({"message": "Internal server error"})
+            }
 
         response_data = {
             "specification_id": specification_id,
@@ -101,6 +151,7 @@ def lambda_handler(event, context):
         try:
             validate(instance=response_data, schema=response_schema)
         except ValidationError:
+            logger.error("Failed to validate response data")
             return {
                 "statusCode": 500,
                 "headers": headers,
@@ -113,8 +164,8 @@ def lambda_handler(event, context):
             "body": json.dumps(response_data)
         }
         
-    except ClientError:
-        # エラーハンドリング
+    except ClientError as e:
+        logger.error(e)
         return {
             "statusCode": 500,
             "headers": headers,
