@@ -41,7 +41,7 @@ codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/com
 runtime = "python3.13"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = ""
+manifest_hash = "af261b4a4f63492f75afebb75d7491a9"
 packagetype = "Zip"
 functions = ["CreateSpecificationFunction"]
 

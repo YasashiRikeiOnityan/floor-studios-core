@@ -170,7 +170,12 @@ Resources:
               - Effect: Allow
                 Action:
                   - s3:GetObject
-                Resource: !Sub "${S3BucketSpecifications.Arn}/*"
+                  - s3:PutObject
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt S3BucketSpecifications.Arn
 
   ######################################################### 
   # 未認証ユーザー用のIAMロール
@@ -203,7 +208,7 @@ Resources:
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketSpecifications}/public/*"
 
   #########################################################
-  # 画像ファイルをテナントごとに保存するためのS3バケット
+  # 仕様書をテナントごとに保存するためのS3バケット
   #########################################################
   S3BucketSpecifications:
     Type: AWS::S3::Bucket
@@ -223,19 +228,42 @@ Resources:
         Variables:
           TENANTS_TABLE_NAME: !Ref TenantsTable
           USERS_TABLE_NAME: !Ref UsersTable
+      Role: !GetAtt CognitoPostConfirmationRole.Arn
+
+  CognitoPostConfirmationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-cognito-post-confirmation
+      RetentionInDays: 14
+
+  CognitoPostConfirmationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-cognito-post-confirmation
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
       Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref TenantsTable
-        - DynamoDBCrudPolicy:
-            TableName: !Ref UsersTable
-        - Version: "2012-10-17"
-          Statement:
-            - Effect: Allow
-              Action:
-                - cognito-idp:AdminUpdateUserAttributes
-              # 循環定義にならないように広い範囲で指定する（微妙...)
-              Resource: !Sub "arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*"
-  
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-cognito-post-confirmation
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-cognito-post-confirmation:*
+              - Effect: Allow
+                Action:
+                  - cognito-idp:AdminUpdateUserAttributes
+                # 循環定義にならないように広い範囲で指定する（微妙...)
+                Resource: !Sub arn:${AWS::Partition}:cognito-idp:${AWS::Region}:${AWS::AccountId}:userpool/*
+
   #########################################################
   # CognitoにLambda関数の呼び出し権限を付与
   #########################################################
@@ -317,12 +345,16 @@ Resources:
         #     Auth:
         #       Authorizer: CognitoAuthorizer
 
+  #########################################################
   UsersFuctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users
       RetentionInDays: 14
-  
+
+  #########################################################
+  # users Lambda関数のロールの定義
+  #########################################################
   UsersFuctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -341,9 +373,10 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users:*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -389,12 +422,18 @@ Resources:
         #     Auth:
         #       Authorizer: CognitoAuthorizer
 
+  #########################################################
+  # users/{userId} Lambda関数のロググループの定義
+  #########################################################
   UsersUserIdFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
       RetentionInDays: 14
 
+  #########################################################
+  # users/{userId} Lambda関数のロールの定義
+  #########################################################
   UsersUserIdFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -413,9 +452,10 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users-user-id
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-users-user-id:*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -469,6 +509,9 @@ Resources:
       LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications
       RetentionInDays: 14
 
+  #########################################################
+  # specifications Lambda関数のロールの定義
+  #########################################################
   SpecificationsFunctionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -487,14 +530,19 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications:*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:PutItem
                 Resource: !GetAtt SpecificationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SpecificationsTable}/index/*
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -504,11 +552,28 @@ Resources:
                   - sqs:SendMessage
                 Resource: !GetAtt CreateSpecificationSQSQueue.Arn
 
+  #########################################################
+  # CreateSpecificationSQSQueueの定義
+  #########################################################
   CreateSpecificationSQSQueue:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub queue-${ProjectName}-${ProjectType}-${Environment}-create-specification
 
+  #########################################################
+  # SQSキューからLambda関数をトリガーするための権限を追加
+  #########################################################
+  CreateSpecificationSQSQueuePermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CreateSpecificationFunction
+      Principal: sqs.amazonaws.com
+      SourceArn: !GetAtt CreateSpecificationSQSQueue.Arn
+
+  #########################################################
+  # CreateSpecificationFunctionの定義
+  #########################################################
   CreateSpecificationFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -518,20 +583,71 @@ Resources:
       Environment:
         Variables:
           SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
-          SPECIFICATION_BUCKET_NAME: !Ref S3BucketSpecifications
-      Policies:
-        - DynamoDBCrudPolicy:
-            TableName: !Ref SpecificationsTable
-        - S3ReadPolicy:
-            BucketName: !Ref S3BucketSpecifications
-        - S3WritePolicy:
-            BucketName: !Ref S3BucketSpecifications
+          S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
+          S3_BUCKET_KEY_SPECIFICATION_TEMPLATE: template.xlsx
+      Role: !GetAtt CreateSpecificationFunctionRole.Arn
       Events:
         CreateSpecification:
           Type: SQS
           Properties:
             Queue: !GetAtt CreateSpecificationSQSQueue.Arn
             BatchSize: 1
+            Enabled: true
+
+  #########################################################
+  # CreateSpecificationFunctionのロググループの定義
+  #########################################################
+  CreateSpecificationFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-create-specification
+      RetentionInDays: 14
+
+  #########################################################
+  # CreateSpecificationFunctionのロールの定義
+  #########################################################
+  CreateSpecificationFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-create-specification
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-create-specification
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-create-specification:*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt SpecificationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt S3BucketSpecifications.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                Resource: !GetAtt CreateSpecificationSQSQueue.Arn
 
   #########################################################
   # Tenantsテーブルの定義

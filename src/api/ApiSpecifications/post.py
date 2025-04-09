@@ -121,16 +121,16 @@ def lambda_handler(event, context):
             QueueUrl=create_specification_sqs_queue_url,
             MessageBody=json.dumps({
                 "specification_id": specification_id,
-                "tenant_id": tenant_id
+                "tenant_id_status": tenant_id + "#" + "DRAFT"
             }),
             MessageAttributes={
                 "specification_id": {
                     "DataType": "String",
                     "StringValue": specification_id
                 },
-                "tenant_id": {
+                "tenant_id_status": {
                     "DataType": "String",
-                    "StringValue": tenant_id
+                    "StringValue": tenant_id + "#" + "DRAFT"
                 }
             }
         )
