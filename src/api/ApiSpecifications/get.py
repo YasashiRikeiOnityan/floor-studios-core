@@ -2,15 +2,16 @@ import os
 import boto3
 import json
 import logging
+from utils import dynamo_to_python
 
-# AWSリソース
-dynamodb = boto3.resource("dynamodb")
+# AWSクライアント
+dynamodb = boto3.client("dynamodb")
 
 # 環境変数
-specifications_table = dynamodb.Table(os.environ["SPECIFICATIONS_TABLE_NAME"])
+SPECIFICATIONS_TABLE_NAME = os.environ["SPECIFICATIONS_TABLE_NAME"]
 
 # ログの設定
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
@@ -20,6 +21,12 @@ def lambda_handler(event, context):
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*"
     }
+
+    specification_group_id = None
+    status = None
+    if event["queryStringParameters"]:
+        specification_group_id = event["queryStringParameters"]["specification_group_id"]
+        status = event["queryStringParameters"]["status"]
 
     # tenant_idを取得
     tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
@@ -32,19 +39,28 @@ def lambda_handler(event, context):
         }
 
     try:
-        # specification_group_idに一致するデータを取得
-        # GSISKがtenant_id#statusが${tenant_id}#で始まるデータを取得
-        response = specifications_table.query(
-            IndexName="SpecificationGroupIdIndex",
-            KeyConditionExpression="specification_group_id = :specification_group_id AND #tenant_status = :tenant_id_status",
-            ExpressionAttributeNames={
-                "#tenant_status": "tenant_id#status"
-            },
-            ExpressionAttributeValues={
-                ":specification_group_id": "NO_GROUP",
-                ":tenant_id_status": tenant_id + "#" + "DRAFT"
-            }
-        )
+        if specification_group_id:
+            # テナントIDに紐づく仕様書を取得
+            response = dynamodb.query(
+                TableName=SPECIFICATIONS_TABLE_NAME,
+                IndexName="SpecificationGroupIdIndex", 
+                KeyConditionExpression="specification_group_id = :specification_group_id AND tenant_id#status, :tenant_id#status",
+                ExpressionAttributeValues={
+                    ":specification_group_id": {"S": specification_group_id},
+                    ":tenant_id#status": {"S": tenant_id + "#" + status}
+                }
+            )
+        else:
+            # テナントIDに紐づく仕様書を取得
+            response = dynamodb.query(
+                TableName=SPECIFICATIONS_TABLE_NAME,
+                IndexName="TenantIdIndex", 
+                KeyConditionExpression="tenant_id = :tenant_id",
+                ExpressionAttributeValues={
+                    ":tenant_id": {"S": tenant_id}
+                }
+            )
+
 
         if "Items" not in response:
             logger.error("specifications not found")
@@ -58,7 +74,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": headers,
-            "body": json.dumps(response["Items"])
+            "body": json.dumps(map(dynamo_to_python, response["Items"]))
         }
 
     except Exception as e:

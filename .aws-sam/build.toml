@@ -41,8 +41,17 @@ codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/com
 runtime = "python3.13"
 architecture = "x86_64"
 handler = "app.lambda_handler"
-manifest_hash = "af261b4a4f63492f75afebb75d7491a9"
+manifest_hash = "960c02120959912db5f55c60e6cd3372"
 packagetype = "Zip"
 functions = ["CreateSpecificationFunction"]
+
+[function_build_definitions.e49fe486-2257-4484-873d-dd23ca22bdd5]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/ApiSpecificationsSpecificationId"
+runtime = "python3.13"
+architecture = "x86_64"
+handler = "app.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["SpecificationsSpecificationIdFunction"]
 
 [layer_build_definitions]

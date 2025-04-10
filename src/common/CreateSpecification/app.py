@@ -5,7 +5,6 @@ import os
 import openpyxl
 import uuid
 from datetime import datetime
-from io import BytesIO
 
 # AWSリソース
 dynamodb = boto3.resource("dynamodb")
@@ -13,11 +12,11 @@ s3 = boto3.client("s3")
 
 # 環境変数
 specifications_table = dynamodb.Table(os.environ["SPECIFICATIONS_TABLE_NAME"])
-s3_bucket = os.environ["S3_BUCKET_SPECIFICATIONS"]
-s3_key = os.environ["S3_BUCKET_KEY_SPECIFICATION_TEMPLATE"]
+s3_bucket_specifications = os.environ["S3_BUCKET_SPECIFICATIONS"]
+s3_key_specification_template = os.environ["S3_BUCKET_KEY_SPECIFICATION_TEMPLATE"]
 
 # ログの設定
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 
@@ -28,22 +27,18 @@ def lambda_handler(event, context):
         # メッセージボディからspecification_idとtenant_id_statusを取得
         message_body = json.loads(event["Records"][0]["body"])
         specification_id = message_body["specification_id"]
-        tenant_id_status = message_body["tenant_id_status"]
-        tenant_id = tenant_id_status.split("#")[0]
+        tenant_id = message_body["tenant_id"]
 
         # テーブルからspecification_idを取得
         response = specifications_table.get_item(
             Key={
                 "specification_id": specification_id,
-                "tenant_id#status": tenant_id_status
+                "tenant_id": tenant_id
             }
         )
 
         if "Item" not in response:
-            logger.error(f"specification_id: {specification_id} not found")
-            raise Exception("specification_id not found")
-        
-        logger.info(f"response: {response}")
+            raise Exception(f"specification_id: {specification_id} not found")
         
         replacements = {
             "brand_name": response["Item"]["brand_name"],
@@ -51,21 +46,20 @@ def lambda_handler(event, context):
         }
         
         # S3からファイルを取得
-        s3_object = s3.get_object(Bucket=s3_bucket, Key=s3_key)
+        s3_object = s3.get_object(Bucket=s3_bucket_specifications, Key=s3_key_specification_template)
         file_content = s3_object["Body"].read()
 
-        logger.info("Successfully got file content from S3")
+        # 一時ファイルに保存
+        tmp_template_path = "/tmp/template.xlsx"
+        with open(tmp_template_path, "wb") as f:
+            f.write(file_content)
 
         # DBの値をテンプレートファイルのプレースホルダーに置換する
-        logger.info("Starting to load workbook...")
-        workbook = openpyxl.load_workbook(BytesIO(file_content))
-        logger.info("Successfully loaded workbook")
+        workbook = openpyxl.load_workbook(tmp_template_path)
 
         # テンプレートファイルのプレースホルダーは{{key}}の形式
-        logger.info("Starting to replace placeholders...")
         for sheet in workbook.worksheets:
-            logger.info(f"Processing sheet: {sheet.title}")
-            for row in sheet.iter_rows():
+            for row in sheet.iter_rows(min_row=1, max_row=108, min_col=1, max_col=12):
                 for cell in row:
                     # セルの値が文字列かどうか確認
                     if isinstance(cell.value, str):
@@ -75,41 +69,35 @@ def lambda_handler(event, context):
                             replaced = replaced.replace(f"{{{{{key}}}}}", val)
                         if replaced != original:
                             cell.value = replaced
-            logger.info(f"Completed processing sheet: {sheet.title}")
-
-        logger.info("Successfully replaced placeholders in the template file")
 
         # uuidでファイル名を生成
         file_name = f"{uuid.uuid4()}.xlsx"
-        # 生成したファイルをS3に保存
-        s3.put_object(Bucket=s3_bucket, Key=tenant_id + "/" + file_name, Body=workbook.to_bytes())
+        output_path = f"/tmp/{file_name}"
+        workbook.save(output_path)
 
-        logger.info("Successfully saved the file to S3")
+        # 生成したファイルをS3に保存
+        with open(output_path, "rb") as f:
+            s3.put_object(Bucket=s3_bucket_specifications, Key=f"{tenant_id}/{file_name}", Body=f.read())
 
         # テーブルのファイル情報を更新
         response = specifications_table.update_item(
             Key={
                 "specification_id": specification_id,
-                "tenant_id#status": tenant_id_status
+                "tenant_id": tenant_id
             },
             UpdateExpression="set specification_file = :specification_file",
             ExpressionAttributeValues={
                 ":specification_file": {
-                    "object": "https://" + s3_bucket + ".s3.ap-northeast-1.amazonaws.com/" + tenant_id + "/" + file_name,
+                    "object": "https://" + s3_bucket_specifications + ".s3.ap-northeast-1.amazonaws.com/" + tenant_id + "/" + file_name,
                     "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
                 }
             }
         )
 
         if response["ResponseMetadata"]["HTTPStatusCode"] != 200:
-            logger.error(f"failed to update specification_file: {response}")
-            raise Exception("failed to update specification_file")
+            raise Exception(f"failed to update specification_file: {response}")
 
-        logger.info(f"Successfully created specification file for specification_id: {specification_id}")
-        return {
-            "statusCode": 200,
-            "body": json.dumps({"message": "Specification file created successfully"})
-        }
+        return { "statusCode": 200 }
 
     except Exception as e:
         logger.error(f"Error processing SQS message: {str(e)}")

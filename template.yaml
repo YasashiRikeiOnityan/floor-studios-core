@@ -485,6 +485,8 @@ Resources:
           USERS_TABLE_NAME: !Ref UsersTable
           CREATE_SPECIFICATION_SQS_QUEUE_URL: !Ref CreateSpecificationSQSQueue
       Role: !GetAtt SpecificationsFunctionRole.Arn
+      Layers:
+        - !Ref CommonLayer
       Events:
         GetSpecifications:
           Type: Api
@@ -552,6 +554,69 @@ Resources:
                   - sqs:SendMessage
                 Resource: !GetAtt CreateSpecificationSQSQueue.Arn
 
+  #########################################################
+  # specifications/{specificationId} Lambda関数の定義
+  #########################################################
+  SpecificationsSpecificationIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id
+      CodeUri: src/api/ApiSpecificationsSpecificationId/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
+          USERS_TABLE_NAME: !Ref UsersTable
+      Role: !GetAtt SpecificationsSpecificationIdFunctionRole.Arn
+      Events:
+        GetSpecificationsSpecificationId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications/{specification_id}
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Layers:
+        - !Ref CommonLayer
+
+  #########################################################
+  # specifications/{specificationId} Lambda関数のロググループの定義
+  #########################################################
+  SpecificationsSpecificationIdFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id
+      RetentionInDays: 14
+
+  #########################################################
+  # specifications/{specificationId} Lambda関数のロールの定義
+  #########################################################
+  SpecificationsSpecificationIdFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt SpecificationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt UsersTable.Arn
+      
   #########################################################
   # CreateSpecificationSQSQueueの定義
   #########################################################
@@ -702,16 +767,24 @@ Resources:
       AttributeDefinitions:
         - AttributeName: specification_id
           AttributeType: S
-        - AttributeName: tenant_id#status
+        - AttributeName: tenant_id
           AttributeType: S
         - AttributeName: specification_group_id
+          AttributeType: S
+        - AttributeName: tenant_id#status
           AttributeType: S
       KeySchema:
         - AttributeName: specification_id
           KeyType: HASH
-        - AttributeName: tenant_id#status
+        - AttributeName: tenant_id
           KeyType: RANGE
       GlobalSecondaryIndexes:
+        - IndexName: TenantIdIndex
+          KeySchema:
+            - AttributeName: tenant_id
+              KeyType: HASH
+          Projection:
+            ProjectionType: ALL
         - IndexName: SpecificationGroupIdIndex
           KeySchema:
             - AttributeName: specification_group_id
@@ -747,6 +820,19 @@ Resources:
               KeyType: HASH
           Projection:
             ProjectionType: ALL
+
+  #########################################################
+  # Lambda Layerの定義
+  #########################################################
+  CommonLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub layer-${ProjectName}-${ProjectType}-${Environment}-common
+      Description: Common utilities for Floor Studios Core
+      ContentUri: src/layer
+      CompatibleRuntimes:
+        - python3.13
+      RetentionPolicy: Retain
 
 Outputs:
   UserPoolId:

@@ -7,18 +7,19 @@ from jsonschema import validate, ValidationError
 import uuid
 from datetime import datetime
 import logging
+from utils import python_to_dynamo
 
-# AWSリソース
-dynamodb = boto3.resource("dynamodb")
+# AWSクライアント
+dynamodb = boto3.client("dynamodb")
 sqs = boto3.client("sqs")
 
 # 環境変数
-specifications_table = dynamodb.Table(os.environ["SPECIFICATIONS_TABLE_NAME"])
-users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
-create_specification_sqs_queue_url = os.environ["CREATE_SPECIFICATION_SQS_QUEUE_URL"]
+SPECIFICATIONS_TABLE_NAME = os.environ["SPECIFICATIONS_TABLE_NAME"]
+USERS_TABLE_NAME = os.environ["USERS_TABLE_NAME"]
+CREATE_SPECIFICATION_SQS_QUEUE_URL = os.environ["CREATE_SPECIFICATION_SQS_QUEUE_URL"]
 
 # ログの設定
-logger = logging.getLogger()
+logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # スキーマの読み込み
@@ -34,7 +35,8 @@ response_schema = load_schema()["responses"]["200"]["content"]["application/json
 
 
 def lambda_handler(event, context):
-    logger.info(event)
+    logger.info(f"Received event: {event}")
+
     # CORSヘッダーを定義
     headers = {
         "Content-Type": "application/json",
@@ -55,7 +57,7 @@ def lambda_handler(event, context):
 
         # リクエストボディをJSONとしてパース
         body = json.loads(event.get("body", "{}"))
-        logger.info(body)
+
         # スキーマバリデーション
         try:
             validate(instance=body, schema=request_schema)
@@ -73,9 +75,12 @@ def lambda_handler(event, context):
         # リクエストユーザー情報の取得
         request_user_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("sub")
 
-        response_user_data = users_table.get_item(Key={"tenant_id": tenant_id, "user_id": request_user_id})
+        request_user_data = dynamodb.get_item(
+            TableName=USERS_TABLE_NAME,
+            Key={"user_id": {"S": request_user_id}, "tenant_id": {"S": tenant_id}}
+        )
 
-        if "Item" not in response_user_data:
+        if "Item" not in request_user_data:
             logger.error("User not found")
             return {
                 "statusCode": 400,
@@ -84,28 +89,28 @@ def lambda_handler(event, context):
             }
 
         # リクエストユーザー名を取得
-        request_user_name = response_user_data.get("Item", {}).get("user_name")
+        request_user_name = request_user_data.get("Item", {}).get("user_name")
+
+        put_item = python_to_dynamo({
+            "specification_id": specification_id,
+            "tenant_id": tenant_id,
+            "tenant_id#status": tenant_id + "#" + "DRAFT",
+            "specification_group_id": "NO_GROUP",
+            "brand_name": body["brand_name"],
+            "product_name": body["product_name"],
+            "product_code": body["product_code"],
+            "status": "DRAFT",
+            "updated_by": {
+                "user_id": request_user_id,
+                "user_name": request_user_name
+            },
+            "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        })
 
         # テーブルにデータを挿入
-        response_specifications_table = specifications_table.put_item(
-            Item={
-                # PK
-                "specification_id": specification_id,
-                # SK, GSISK
-                # TODO: tenant_id#statusを生成する関数は共通化する。
-                "tenant_id#status": tenant_id + "#" + "DRAFT",
-                # GSIPK
-                "specification_group_id": "NO_GROUP",
-                "brand_name": body["brand_name"],
-                "product_name": body["product_name"],
-                "product_code": body["product_code"],
-                "status": "DRAFT",
-                "updated_by": {
-                    "user_id": request_user_id,
-                    "user_name": request_user_name
-                },
-                "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
-            }
+        response_specifications_table = dynamodb.put_item(
+            TableName=SPECIFICATIONS_TABLE_NAME,
+            Item=put_item
         )
 
         if response_specifications_table.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
@@ -118,19 +123,19 @@ def lambda_handler(event, context):
         
         # キューにメッセージを送信
         response_sqs = sqs.send_message(
-            QueueUrl=create_specification_sqs_queue_url,
+            QueueUrl=CREATE_SPECIFICATION_SQS_QUEUE_URL,
             MessageBody=json.dumps({
                 "specification_id": specification_id,
-                "tenant_id_status": tenant_id + "#" + "DRAFT"
+                "tenant_id": tenant_id
             }),
             MessageAttributes={
                 "specification_id": {
                     "DataType": "String",
                     "StringValue": specification_id
                 },
-                "tenant_id_status": {
+                "tenant_id": {
                     "DataType": "String",
-                    "StringValue": tenant_id + "#" + "DRAFT"
+                    "StringValue": tenant_id
                 }
             }
         )

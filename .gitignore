@@ -245,3 +245,5 @@ $RECYCLE.BIN/
 
 # AWS SAM
 .aws-sam/
+
+.vscode/
