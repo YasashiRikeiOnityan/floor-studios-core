@@ -7,7 +7,7 @@ from jsonschema import validate, ValidationError
 import uuid
 from datetime import datetime
 import logging
-from utils import python_to_dynamo
+from utils import dynamo_to_python, python_to_dynamo
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -89,7 +89,7 @@ def lambda_handler(event, context):
             }
 
         # リクエストユーザー名を取得
-        request_user_name = request_user_data.get("Item", {}).get("user_name")
+        request_user_name = dynamo_to_python(request_user_data.get("Item", {}).get("user_name"))
 
         put_item = python_to_dynamo({
             "specification_id": specification_id,

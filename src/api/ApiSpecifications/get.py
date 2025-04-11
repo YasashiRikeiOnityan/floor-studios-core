@@ -44,10 +44,13 @@ def lambda_handler(event, context):
             response = dynamodb.query(
                 TableName=SPECIFICATIONS_TABLE_NAME,
                 IndexName="SpecificationGroupIdIndex", 
-                KeyConditionExpression="specification_group_id = :specification_group_id AND tenant_id#status, :tenant_id#status",
+                KeyConditionExpression="specification_group_id = :specification_group_id AND #tenant_id_status = :tenant_id_status",
+                ExpressionAttributeNames={
+                    "#tenant_id_status": "tenant_id#status"
+                },
                 ExpressionAttributeValues={
                     ":specification_group_id": {"S": specification_group_id},
-                    ":tenant_id#status": {"S": tenant_id + "#" + status}
+                    ":tenant_id_status": {"S": tenant_id + "#" + status}
                 }
             )
         else:
@@ -74,7 +77,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": headers,
-            "body": json.dumps(map(dynamo_to_python, response["Items"]))
+            "body": json.dumps(list(map(dynamo_to_python, response["Items"])))
         }
 
     except Exception as e:
