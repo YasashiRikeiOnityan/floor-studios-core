@@ -56,7 +56,7 @@ def lambda_handler(event, context):
             }
 
         # リクエストボディをJSONとしてパース
-        body = json.loads(event.get("body", "{}"))
+        body = json.loads(event.get("body", {}))
 
         # スキーマバリデーション
         try:
@@ -89,7 +89,7 @@ def lambda_handler(event, context):
             }
 
         # リクエストユーザー名を取得
-        request_user_name = dynamo_to_python(request_user_data.get("Item", {}).get("user_name"))
+        request_user_name = dynamo_to_python(request_user_data.get("Item", {})).get("user_name")
 
         put_item = python_to_dynamo({
             "specification_id": specification_id,
@@ -164,7 +164,7 @@ def lambda_handler(event, context):
             }
 
         return {
-            "statusCode": 200,
+            "statusCode": 201,
             "headers": headers,
             "body": json.dumps(response_data)
         }

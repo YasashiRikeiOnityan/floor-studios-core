@@ -6,12 +6,6 @@ def lambda_handler(event, context):
     if http_method == "GET":
         from get import lambda_handler as get_handler
         return get_handler(event, context)
-    # elif http_method == "PUT":
-    # from put import lambda_handler as put_handler
-    #     return put_handler(event, context)
-    elif http_method == "DELETE":
-        from delete import lambda_handler as delete_handler
-        return delete_handler(event, context)
     else:
         import json
         return {

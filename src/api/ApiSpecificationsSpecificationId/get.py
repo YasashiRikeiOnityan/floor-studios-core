@@ -2,7 +2,7 @@ import os
 import json
 import boto3
 from botocore.exceptions import ClientError
-import yaml
+# import yaml
 from jsonschema import validate, ValidationError
 import logging
 
@@ -18,14 +18,14 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 # スキーマの読み込み
-def load_schema():
-    schema_path = os.path.join(os.path.dirname(__file__), "schema.yaml")
-    with open(schema_path, "r") as f:
-        schema = yaml.safe_load(f)
-    return schema["paths"]["/v1/specifications/{specification_id}"]["get"]
+# def load_schema():
+#     schema_path = os.path.join(os.path.dirname(__file__), "schema.yaml")
+#     with open(schema_path, "r") as f:
+#         schema = yaml.safe_load(f)
+#     return schema["paths"]["/v1/specifications/{specification_id}"]["get"]
 
 # スキーマの取得
-response_schema = load_schema()["responses"]["200"]["content"]["application/json"]["schema"]
+# response_schema = load_schema()["responses"]["200"]["content"]["application/json"]["schema"]
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
@@ -85,16 +85,16 @@ def lambda_handler(event, context):
         specification_data = response["Item"]
         
         # レスポンスのスキーマバリデーション
-        try:
-            validate(instance=specification_data, schema=response_schema)
-        except ValidationError:
-            return {
-                "statusCode": 500,
-                "headers": headers,
-                "body": json.dumps({
-                    "message": "Internal server error"
-                })
-            }
+        # try:
+        #     validate(instance=specification_data, schema=response_schema)
+        # except ValidationError:
+        #     return {
+        #         "statusCode": 500,
+        #         "headers": headers,
+        #         "body": json.dumps({
+        #             "message": "Internal server error"
+        #         })
+        #     }
 
         # 仕様書情報を返す
         return {

@@ -77,10 +77,8 @@ Resources:
         DefaultEmailOption: CONFIRM_WITH_CODE
         EmailSubject: "Floor Studios - Email Verification"
         EmailMessage: | 
-          Verification Code: {####}
-
-          Please enter this code to verify your email address.
-
+          Verification Code: {####}\n\n
+          Please enter this code to verify your email address.\n\n
           This code is valid for 10 minutes.
       # ユーザー属性の定義
       Schema:
@@ -413,14 +411,6 @@ Resources:
             Method: put
             Auth:
               Authorizer: CognitoAuthorizer
-        # DeleteUsersUserId:
-        #   Type: Api
-        #   Properties:
-        #     RestApiId: !Ref FloorStudiosApi
-        #     Path: /v1/users/{user_id}
-        #     Method: delete
-        #     Auth:
-        #       Authorizer: CognitoAuthorizer
 
   #########################################################
   # users/{userId} Lambda関数のロググループの定義
@@ -577,6 +567,14 @@ Resources:
             Method: get
             Auth:
               Authorizer: CognitoAuthorizer
+        DeleteSpecificationsSpecificationId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications/{specification_id}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
       Layers:
         - !Ref CommonLayer
 
@@ -611,12 +609,89 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
                 Resource: !GetAtt SpecificationsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
                 Resource: !GetAtt UsersTable.Arn
-      
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id:*
+
+  #########################################################
+  # specifications/{specificationId}/download Lambda関数の定義
+  #########################################################
+  SpecificationsSpecificationIdDownloadFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+      CodeUri: src/api/ApiSpecificationsSpecificationIdDownload/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
+          S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
+      Role: !GetAtt SpecificationsSpecificationIdDownloadFunctionRole.Arn
+      Events:
+        PostSpecificationsSpecificationIdDownload:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications/{specification_id}/download
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Layers:
+        - !Ref CommonLayer
+
+  #########################################################
+  # specifications/{specificationId}/download Lambda関数のロググループの定義
+  #########################################################
+  SpecificationsSpecificationIdDownloadFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+      RetentionInDays: 14
+
+  #########################################################
+  # specifications/{specificationId}/download Lambda関数のロールの定義
+  #########################################################
+  SpecificationsSpecificationIdDownloadFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt SpecificationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download:*
+
   #########################################################
   # CreateSpecificationSQSQueueの定義
   #########################################################
