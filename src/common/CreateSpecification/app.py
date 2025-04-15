@@ -88,7 +88,7 @@ def lambda_handler(event, context):
             UpdateExpression="set specification_file = :specification_file",
             ExpressionAttributeValues={
                 ":specification_file": {
-                    "object": "https://" + s3_bucket_specifications + ".s3.ap-northeast-1.amazonaws.com/" + tenant_id + "/" + file_name,
+                    "object": file_name,
                     "updated_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00")
                 }
             }

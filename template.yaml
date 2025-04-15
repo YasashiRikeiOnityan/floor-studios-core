@@ -77,8 +77,8 @@ Resources:
         DefaultEmailOption: CONFIRM_WITH_CODE
         EmailSubject: "Floor Studios - Email Verification"
         EmailMessage: | 
-          Verification Code: {####}\n\n
-          Please enter this code to verify your email address.\n\n
+          Verification Code: {####}<br><br>
+          Please enter this code to verify your email address.<br><br>
           This code is valid for 10 minutes.
       # ユーザー属性の定義
       Schema:
@@ -250,6 +250,14 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt TenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt UsersTable.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -629,7 +637,7 @@ Resources:
   SpecificationsSpecificationIdDownloadFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-download
       CodeUri: src/api/ApiSpecificationsSpecificationIdDownload/
       Handler: app.lambda_handler
       Environment:
@@ -655,7 +663,7 @@ Resources:
   SpecificationsSpecificationIdDownloadFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-download
       RetentionInDays: 14
 
   #########################################################
@@ -664,7 +672,7 @@ Resources:
   SpecificationsSpecificationIdDownloadFunctionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-download
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -673,7 +681,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-download
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -690,7 +698,7 @@ Resources:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specifications-specification-id-download:*
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-download:*
 
   #########################################################
   # CreateSpecificationSQSQueueの定義
@@ -788,6 +796,71 @@ Resources:
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt CreateSpecificationSQSQueue.Arn
+
+  SpecificationGroupsFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specification-groups
+      CodeUri: src/api/ApiSpecificationGroups/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SPECIFICATION_GROUPS_TABLE_NAME: !Ref SpecificationGroupsTable
+      Role: !GetAtt SpecificationGroupsFunctionRole.Arn
+      Events:
+        GetSpecificationGroups:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specificationgroups
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Layers:
+        - !Ref CommonLayer
+
+  #########################################################
+  # SpecificationGroupsFunctionのロググループの定義
+  #########################################################
+  SpecificationGroupsFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups
+      RetentionInDays: 14
+
+  #########################################################
+  # SpecificationGroupsFunctionのロールの定義
+  #########################################################
+  SpecificationGroupsFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specification-groups
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specification-groups
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt SpecificationGroupsTable.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SpecificationGroupsTable}/index/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups:*
 
   #########################################################
   # Tenantsテーブルの定義

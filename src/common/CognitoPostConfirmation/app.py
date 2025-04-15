@@ -4,11 +4,11 @@ import json
 from botocore.exceptions import ClientError
 import uuid
 
-dynamodb = boto3.resource("dynamodb")
+dynamodb = boto3.client("dynamodb")
 cognito = boto3.client('cognito-idp')
 
-tenants_table = dynamodb.Table(os.environ["TENANTS_TABLE_NAME"])
-users_table = dynamodb.Table(os.environ["USERS_TABLE_NAME"])
+TENANTS_TABLE_NAME = os.environ["TENANTS_TABLE_NAME"]
+USERS_TABLE_NAME = os.environ["USERS_TABLE_NAME"]
 
 
 def lambda_handler(event, context):
@@ -35,10 +35,10 @@ def lambda_handler(event, context):
 
         # テナントテーブルに新規テナントを保存
         try:
-            tenants_table.put_item(
+            dynamodb.put_item(
+                TableName=TENANTS_TABLE_NAME,
                 Item={
-                    "tenant_id": tenant_id,
-                    "status": "active"
+                    "tenant_id": tenant_id
                 }
             )
         except ClientError as e:
@@ -47,7 +47,8 @@ def lambda_handler(event, context):
 
         # ユーザーテーブルに新規ユーザーを保存
         try:
-            users_table.put_item(
+            dynamodb.put_item(
+                TableName=USERS_TABLE_NAME,
                 Item={
                     "user_id": user_id,
                     "tenant_id": tenant_id,
