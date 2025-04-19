@@ -95,7 +95,7 @@ def lambda_handler(event, context):
             "specification_id": specification_id,
             "tenant_id": tenant_id,
             "tenant_id#status": tenant_id + "#" + "DRAFT",
-            "specification_group_id": "NO_GROUP",
+            "specification_group_id": body.get("specification_group_id", "NO_GROUP"),
             "brand_name": body["brand_name"],
             "product_name": body["product_name"],
             "product_code": body["product_code"],

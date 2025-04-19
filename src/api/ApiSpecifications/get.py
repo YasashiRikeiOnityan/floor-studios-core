@@ -22,11 +22,8 @@ def lambda_handler(event, context):
         "Access-Control-Allow-Origin": "*"
     }
 
-    specification_group_id = None
-    status = None
-    if event["queryStringParameters"]:
-        specification_group_id = event["queryStringParameters"]["specification_group_id"]
-        status = event["queryStringParameters"]["status"]
+    specification_group_id = event.get("queryStringParameters", {}).get("specification_group_id", None)
+    status = event.get("queryStringParameters", {}).get("status", None)
 
     # tenant_idを取得
     tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
@@ -40,19 +37,30 @@ def lambda_handler(event, context):
 
     try:
         if specification_group_id:
-            # テナントIDに紐づく仕様書を取得
-            response = dynamodb.query(
-                TableName=SPECIFICATIONS_TABLE_NAME,
-                IndexName="SpecificationGroupIdIndex", 
-                KeyConditionExpression="specification_group_id = :specification_group_id AND #tenant_id_status = :tenant_id_status",
-                ExpressionAttributeNames={
-                    "#tenant_id_status": "tenant_id#status"
-                },
-                ExpressionAttributeValues={
-                    ":specification_group_id": {"S": specification_group_id},
-                    ":tenant_id_status": {"S": tenant_id + "#" + status}
-                }
-            )
+            if status:
+                # テナントIDに紐づく仕様書を取得
+                response = dynamodb.query(
+                    TableName=SPECIFICATIONS_TABLE_NAME,
+                    IndexName="SpecificationGroupIdIndex", 
+                    KeyConditionExpression="specification_group_id = :specification_group_id AND #tenant_id_status = :tenant_id_status",
+                    ExpressionAttributeNames={
+                        "#tenant_id_status": "tenant_id#status"
+                    },
+                    ExpressionAttributeValues={
+                        ":specification_group_id": {"S": specification_group_id},
+                        ":tenant_id_status": {"S": tenant_id + "#" + status}
+                    }
+                )
+            else:
+                # テナントIDに紐づく仕様書を取得
+                response = dynamodb.query(
+                    TableName=SPECIFICATIONS_TABLE_NAME,
+                    IndexName="SpecificationGroupIdIndex", 
+                    KeyConditionExpression="specification_group_id = :specification_group_id",
+                    ExpressionAttributeValues={
+                        ":specification_group_id": {"S": specification_group_id}
+                    }
+                )
         else:
             # テナントIDに紐づく仕様書を取得
             response = dynamodb.query(

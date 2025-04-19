@@ -1,0 +1,103 @@
+import os
+import json
+import boto3
+from botocore.exceptions import ClientError
+import logging
+from utils import dynamo_to_python, value_to_dynamo
+
+# AWSクライアント
+dynamodb = boto3.client("dynamodb")
+
+# 環境変数
+TENANTS_TABLE_NAME = os.environ["TENANTS_TABLE_NAME"]
+
+# ログの設定
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+
+
+def lambda_handler(event, context):
+    logger.info(f"Received event: {event}")
+
+    # CORSヘッダーを定義
+    headers = {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+    }
+
+    try:
+        # tenant_idを取得
+        tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
+
+        # tenant_idが存在しない場合は400エラーを返す
+        if not tenant_id:
+            return {
+                "statusCode": 400,
+                "headers": headers,
+                "body": json.dumps({
+                    "message": "tenant_id is required"
+                })
+            }
+        
+        # リクエストボディをJSONとしてパース
+        body = json.loads(event.get("body", "{}"))
+
+        update_items = list(filter(lambda x: x in body, ["tenant_name", "contact", "billing_address", "shipping_address"]))
+
+        update_expression = "set " + ", ".join([f"#{item} = :{item}" for item in update_items])
+
+        expression_attribute_names = {
+            f"#{item}": item for item in update_items
+        }
+
+        expression_attribute_values = {
+            f":{item}": value_to_dynamo(body[item]) for item in update_items
+        }
+        
+        # テナント情報を更新
+        update_tenant_response = dynamodb.update_item(
+            TableName=TENANTS_TABLE_NAME,
+            Key={
+                "tenant_id": {"S": tenant_id}
+            },
+            UpdateExpression=update_expression,
+            ExpressionAttributeNames=expression_attribute_names,
+            ExpressionAttributeValues=expression_attribute_values
+        )
+
+        if update_tenant_response["ResponseMetadata"]["HTTPStatusCode"] != 200:
+            return {
+                "statusCode": 500,
+                "headers": headers,
+                "body": json.dumps({"message": "Internal server error"})
+            }
+        
+        # テナント情報を取得
+        get_tenant_response = dynamodb.get_item(
+            TableName=TENANTS_TABLE_NAME,
+            Key={
+                "tenant_id": {"S": tenant_id}
+            }
+        )
+
+        if "Item" not in get_tenant_response:
+            return {
+                "statusCode": 404,
+                "headers": headers,
+                "body": json.dumps({"message": "Tenant not found"})
+            }
+
+        # テナント情報を返す
+        return {
+            "statusCode": 200,
+            "headers": headers,
+            "body": json.dumps(dynamo_to_python(get_tenant_response["Item"]))
+        }
+
+    except ClientError as e:
+        logger.error(e)
+        return {
+            "statusCode": 500,
+            "headers": headers,
+            "body": json.dumps({"message": "Internal server error"})
+        }

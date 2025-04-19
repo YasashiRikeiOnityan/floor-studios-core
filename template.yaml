@@ -321,6 +321,79 @@ Resources:
               Access-Control-Allow-Methods: "'GET,POST,PUT,DELETE,OPTIONS'"
 
   #########################################################
+  # tenant Lambda関数の定義
+  #########################################################
+  TenantFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-tenant
+      CodeUri: src/api/ApiTenant/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          TENANTS_TABLE_NAME: !Ref TenantsTable
+      Role: !GetAtt TenantFunctionRole.Arn
+      Layers:
+        - !Ref CommonLayer
+      Events:
+        GetTenant:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/tenant
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutTenant:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/tenant
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+
+  #########################################################
+  # tenant Lambda関数のロググループの定義
+  #########################################################
+  TenantFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-tenant
+      RetentionInDays: 14
+
+  #########################################################
+  # tenant Lambda関数のロールの定義
+  #########################################################
+  TenantFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-tenant
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-tenant
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt TenantsTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-tenant:*
+
+  #########################################################
   # users Lambda関数の定義
   #########################################################
   UsersFunction:
