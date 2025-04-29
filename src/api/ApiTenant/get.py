@@ -1,9 +1,8 @@
 import os
 import json
 import boto3
-from botocore.exceptions import ClientError
 import logging
-from utils import dynamo_to_python
+import utils
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -18,12 +17,11 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
+    logger.info(f"Received context: {context}")
 
-    # CORSヘッダーを定義
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-    }
+    # クエリパラメータを取得
+    query_params = event.get("queryStringParameters", {})
+    kind = query_params.get("kind", "TENANT") if query_params else "TENANT"
 
     try:
         # tenant_idを取得
@@ -33,41 +31,41 @@ def lambda_handler(event, context):
         if not tenant_id:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({
                     "message": "tenant_id is required"
                 })
             }
-
-        # テナント情報を取得
-        response = dynamodb.get_item(
+        
+        tenant = dynamodb.get_item(
             TableName=TENANTS_TABLE_NAME,
             Key={
-                "tenant_id": {"S": tenant_id}
+                "tenant_id": {"S": tenant_id},
+                "kind": {"S": kind}
             }
         )
 
         # テナントが存在しない場合
-        if "Item" not in response:
+        if "Item" not in tenant:
             return {
                 "statusCode": 404,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({
                     "message": "Tenant not found"
                 })
             }
+        
+        tenant_item = tenant["Item"]
+        tenant_item.pop("tenant_id", None)
+        tenant_item.pop("kind", None)
 
         # テナント情報を返す
         return {
             "statusCode": 200,
-            "headers": headers,
-            "body": json.dumps(dynamo_to_python(response["Item"]))
+            "headers": utils.get_response_headers(),
+            "body": json.dumps(utils.dynamo_to_python(tenant_item), default=utils.decimal_to_num)
         }
 
-    except ClientError as e:
+    except Exception as e:
         logger.error(e)
-        return {
-            "statusCode": 500,
-            "headers": headers,
-            "body": json.dumps({"message": "Internal server error"})
-        }
+        return utils.get_response_internal_server_error()

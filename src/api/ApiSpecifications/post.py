@@ -7,7 +7,7 @@ from jsonschema import validate, ValidationError
 import uuid
 from datetime import datetime
 import logging
-from utils import dynamo_to_python, python_to_dynamo
+import utils
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -36,39 +36,33 @@ response_schema = load_schema()["responses"]["200"]["content"]["application/json
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
+    logger.info(f"Received context: {context}")
 
-    # CORSヘッダーを定義
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-    }
+    tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
+
+    if not tenant_id:
+        logger.error("tenant_id is required")
+        return {
+            "statusCode": 400,
+            "headers": utils.get_response_headers(),
+            "body": json.dumps({"message": "tenant_id is required"})
+        }
+
+    # リクエストボディをJSONとしてパース
+    body = json.loads(event.get("body", {}))
+
+    # スキーマバリデーション
+    try:
+        validate(instance=body, schema=request_schema)
+    except ValidationError:
+        logger.error("Invalid request body")
+        return {
+            "statusCode": 400,
+            "headers": utils.get_response_headers(),
+            "body": json.dumps({"message": "Invalid request body"})
+        }
 
     try:
-        # tenant_idを取得
-        tenant_id = event.get("requestContext", {}).get("authorizer", {}).get("claims", {}).get("custom:tenant_id")
-
-        if not tenant_id:
-            logger.error("tenant_id is required")
-            return {
-                "statusCode": 400,
-                "headers": headers,
-                "body": json.dumps({"message": "tenant_id is required"})
-            }
-
-        # リクエストボディをJSONとしてパース
-        body = json.loads(event.get("body", {}))
-
-        # スキーマバリデーション
-        try:
-            validate(instance=body, schema=request_schema)
-        except ValidationError:
-            logger.error("Invalid request body")
-            return {
-                "statusCode": 400,
-                "headers": headers,
-                "body": json.dumps({"message": "Invalid request body"})
-            }
-        
         # specification_idを生成
         specification_id = str(uuid.uuid4())
 
@@ -84,14 +78,14 @@ def lambda_handler(event, context):
             logger.error("User not found")
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "User not found"})
             }
 
         # リクエストユーザー名を取得
-        request_user_name = dynamo_to_python(request_user_data.get("Item", {})).get("user_name")
+        request_user_name = utils.dynamo_to_python(request_user_data.get("Item", {})).get("user_name")
 
-        put_item = python_to_dynamo({
+        put_item = utils.python_to_dynamo({
             "specification_id": specification_id,
             "tenant_id": tenant_id,
             "tenant_id#status": tenant_id + "#" + "DRAFT",
@@ -100,6 +94,7 @@ def lambda_handler(event, context):
             "product_name": body["product_name"],
             "product_code": body["product_code"],
             "status": "DRAFT",
+            "progress": "INITIAL",
             "updated_by": {
                 "user_id": request_user_id,
                 "user_name": request_user_name
@@ -115,11 +110,7 @@ def lambda_handler(event, context):
 
         if response_specifications_table.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
             logger.error("Failed to insert data into specifications table")
-            return {
-                "statusCode": 500,
-                "headers": headers,
-                "body": json.dumps({"message": "Internal server error"})
-            }
+            return utils.get_response_internal_server_error()
         
         # キューにメッセージを送信
         response_sqs = sqs.send_message(
@@ -142,11 +133,7 @@ def lambda_handler(event, context):
 
         if response_sqs.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
             logger.error("Failed to send message to create specification sqs queue")
-            return {
-                "statusCode": 500,
-                "headers": headers,
-                "body": json.dumps({"message": "Internal server error"})
-            }
+            return utils.get_response_internal_server_error()
 
         response_data = {
             "specification_id": specification_id,
@@ -157,23 +144,15 @@ def lambda_handler(event, context):
             validate(instance=response_data, schema=response_schema)
         except ValidationError:
             logger.error("Failed to validate response data")
-            return {
-                "statusCode": 500,
-                "headers": headers,
-                "body": json.dumps({"message": "Internal server error"})
-            }
+            return utils.get_response_internal_server_error()
 
         return {
             "statusCode": 201,
-            "headers": headers,
+            "headers": utils.get_response_headers(),
             "body": json.dumps(response_data)
         }
         
     except ClientError as e:
         logger.error(e)
-        return {
-            "statusCode": 500,
-            "headers": headers,
-            "body": json.dumps({"message": "Internal server error"})
-        }
+        return utils.get_response_internal_server_error()
         

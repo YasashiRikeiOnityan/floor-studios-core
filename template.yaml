@@ -638,6 +638,7 @@ Resources:
         Variables:
           SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
           USERS_TABLE_NAME: !Ref UsersTable
+          CREATE_SPECIFICATION_SQS_QUEUE_URL: !Ref CreateSpecificationSQSQueue
       Role: !GetAtt SpecificationsSpecificationIdFunctionRole.Arn
       Events:
         GetSpecificationsSpecificationId:
@@ -646,6 +647,14 @@ Resources:
             RestApiId: !Ref FloorStudiosApi
             Path: /v1/specifications/{specification_id}
             Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PutSpecificationsSpecificationId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications/{specification_id}
+            Method: put
             Auth:
               Authorizer: CognitoAuthorizer
         DeleteSpecificationsSpecificationId:
@@ -697,6 +706,10 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                 Resource: !GetAtt UsersTable.Arn
+              - Effect: Allow
+                Action:
+                  - sqs:SendMessage
+                Resource: !GetAtt CreateSpecificationSQSQueue.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -946,9 +959,13 @@ Resources:
       AttributeDefinitions:
         - AttributeName: tenant_id
           AttributeType: S
+        - AttributeName: kind
+          AttributeType: S
       KeySchema:
         - AttributeName: tenant_id
           KeyType: HASH
+        - AttributeName: kind
+          KeyType: RANGE
 
   #########################################################
   # Usersテーブルの定義

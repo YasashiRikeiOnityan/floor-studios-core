@@ -2,7 +2,7 @@ import json
 import logging
 import boto3
 import os
-from utils import dynamo_to_python
+import utils
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -17,12 +17,7 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
-
-    # CORSヘッダーを定義
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-    }
+    logger.info(f"Received context: {context}")
 
     try:
         # パスパラメータからspecification_idを取得
@@ -32,7 +27,7 @@ def lambda_handler(event, context):
         if not specification_id:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "specification_id is required"})
             }
 
@@ -43,7 +38,7 @@ def lambda_handler(event, context):
         if not tenant_id:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({
                     "message": "tenant_id is required"
                 })
@@ -59,16 +54,16 @@ def lambda_handler(event, context):
         if not response["Item"]:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "specification not found"})
             }
 
-        specification_data = dynamo_to_python(response["Item"])
+        specification_data = utils.dynamo_to_python(response["Item"])
         
         if not specification_data["specification_file"]:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "specification_file not found"})
             }
         
@@ -88,7 +83,7 @@ def lambda_handler(event, context):
         if not response:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "failed to generate presigned url"})
             }
         
@@ -96,15 +91,11 @@ def lambda_handler(event, context):
 
         return {
             "statusCode": 200,
-            "headers": headers,
+            "headers": utils.get_response_headers(),
             "body": json.dumps({"url": response}),
             "isBase64Encoded": True
         }
 
     except Exception as e:
         logger.error(e)
-        return {
-            "statusCode": 500,
-            "headers": headers,
-            "body": json.dumps({"message": "Internal Server Error"})
-        }
+        return utils.get_response_internal_server_error()

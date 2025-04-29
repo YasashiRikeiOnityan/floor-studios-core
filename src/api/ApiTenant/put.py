@@ -1,9 +1,8 @@
 import os
 import json
 import boto3
-from botocore.exceptions import ClientError
 import logging
-from utils import dynamo_to_python, value_to_dynamo
+import utils
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -18,12 +17,7 @@ logger.setLevel(logging.INFO)
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
-
-    # CORSヘッダーを定義
-    headers = {
-        "Content-Type": "application/json",
-        "Access-Control-Allow-Origin": "*"
-    }
+    logger.info(f"Received context: {context}")
 
     try:
         # tenant_idを取得
@@ -33,7 +27,7 @@ def lambda_handler(event, context):
         if not tenant_id:
             return {
                 "statusCode": 400,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({
                     "message": "tenant_id is required"
                 })
@@ -51,14 +45,15 @@ def lambda_handler(event, context):
         }
 
         expression_attribute_values = {
-            f":{item}": value_to_dynamo(body[item]) for item in update_items
+            f":{item}": utils.value_to_dynamo(body[item]) for item in update_items
         }
         
         # テナント情報を更新
         update_tenant_response = dynamodb.update_item(
             TableName=TENANTS_TABLE_NAME,
             Key={
-                "tenant_id": {"S": tenant_id}
+                "tenant_id": {"S": tenant_id},
+                "kind": {"S": "tenant"}
             },
             UpdateExpression=update_expression,
             ExpressionAttributeNames=expression_attribute_names,
@@ -68,7 +63,7 @@ def lambda_handler(event, context):
         if update_tenant_response["ResponseMetadata"]["HTTPStatusCode"] != 200:
             return {
                 "statusCode": 500,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "Internal server error"})
             }
         
@@ -76,28 +71,25 @@ def lambda_handler(event, context):
         get_tenant_response = dynamodb.get_item(
             TableName=TENANTS_TABLE_NAME,
             Key={
-                "tenant_id": {"S": tenant_id}
+                "tenant_id": {"S": tenant_id},
+                "kind": {"S": "tenant"}
             }
         )
 
         if "Item" not in get_tenant_response:
             return {
                 "statusCode": 404,
-                "headers": headers,
+                "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "Tenant not found"})
             }
 
         # テナント情報を返す
         return {
             "statusCode": 200,
-            "headers": headers,
-            "body": json.dumps(dynamo_to_python(get_tenant_response["Item"]))
+            "headers": utils.get_response_headers(),
+            "body": json.dumps(utils.dynamo_to_python(get_tenant_response["Item"]))
         }
 
-    except ClientError as e:
+    except Exception as e:
         logger.error(e)
-        return {
-            "statusCode": 500,
-            "headers": headers,
-            "body": json.dumps({"message": "Internal server error"})
-        }
+        return utils.get_response_internal_server_error()

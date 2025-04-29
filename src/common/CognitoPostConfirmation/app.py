@@ -38,7 +38,8 @@ def lambda_handler(event, context):
             dynamodb.put_item(
                 TableName=TENANTS_TABLE_NAME,
                 Item={
-                    "tenant_id": tenant_id
+                    "tenant_id": {"S": tenant_id},
+                    "kind": {"S": "tenant"}
                 }
             )
         except ClientError as e:
@@ -50,9 +51,9 @@ def lambda_handler(event, context):
             dynamodb.put_item(
                 TableName=USERS_TABLE_NAME,
                 Item={
-                    "user_id": user_id,
-                    "tenant_id": tenant_id,
-                    "email": email,
+                    "user_id": {"S": user_id},
+                    "tenant_id": {"S": tenant_id},
+                    "email": {"S": email},
                 }
             )
         except ClientError as e:
