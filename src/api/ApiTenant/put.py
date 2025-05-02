@@ -53,7 +53,7 @@ def lambda_handler(event, context):
             TableName=TENANTS_TABLE_NAME,
             Key={
                 "tenant_id": {"S": tenant_id},
-                "kind": {"S": "tenant"}
+                "kind": {"S": body.get("kind", "TENANT")}
             },
             UpdateExpression=update_expression,
             ExpressionAttributeNames=expression_attribute_names,
@@ -72,7 +72,7 @@ def lambda_handler(event, context):
             TableName=TENANTS_TABLE_NAME,
             Key={
                 "tenant_id": {"S": tenant_id},
-                "kind": {"S": "tenant"}
+                "kind": {"S": body.get("kind", "TENANT")}
             }
         )
 

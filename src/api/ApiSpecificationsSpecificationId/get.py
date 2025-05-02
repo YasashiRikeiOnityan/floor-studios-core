@@ -86,6 +86,10 @@ def lambda_handler(event, context):
         #         })
         #     }
 
+        specification_item = response["Item"]
+        specification_item.pop("tenant_id", None)
+        specification_item.pop("tenant_id#status", None)
+
         # 仕様書情報を返す
         return {
             "statusCode": 200,
