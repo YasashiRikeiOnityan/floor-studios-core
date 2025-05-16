@@ -81,4 +81,13 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["TenantFunction"]
 
+[function_build_definitions.0242a4df-89b0-4435-9f06-c22dc8b329b5]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/ApiImage"
+runtime = "python3.13"
+architecture = "x86_64"
+handler = "app.lambda_handler"
+manifest_hash = ""
+packagetype = "Zip"
+functions = ["ImageFunction"]
+
 [layer_build_definitions]

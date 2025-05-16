@@ -212,6 +212,16 @@ Resources:
     Type: AWS::S3::Bucket
     Properties:
       BucketName: !Sub bucket-${ProjectName}-${ProjectType}-${Environment}-specifications
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - GET
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - "*"
+            AllowedHeaders:
+              - "*"
 
   #########################################################
   # Cognitoトリガー用Lambda関数
@@ -539,7 +549,7 @@ Resources:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
-                Resource: !GetAtt S3BucketSpecifications.Arn
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
 
   #########################################################
   # specifications Lambda関数の定義
@@ -639,6 +649,7 @@ Resources:
           SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
           USERS_TABLE_NAME: !Ref UsersTable
           CREATE_SPECIFICATION_SQS_QUEUE_URL: !Ref CreateSpecificationSQSQueue
+          S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
       Role: !GetAtt SpecificationsSpecificationIdFunctionRole.Arn
       Events:
         GetSpecificationsSpecificationId:
@@ -710,6 +721,12 @@ Resources:
                 Action:
                   - sqs:SendMessage
                 Resource: !GetAtt CreateSpecificationSQSQueue.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
@@ -947,6 +964,72 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups:*
+
+  #########################################################
+  # 画像アップロード用Lambda関数の定義
+  #########################################################
+  ImageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-image
+      CodeUri: src/api/ApiImage/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
+      Role: !GetAtt ImageFunctionRole.Arn
+      Events:
+        PostImage:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/image
+            Method: post
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Layers:
+        - !Ref CommonLayer
+
+  #########################################################
+  # 画像アップロード用Lambda関数のロググループの定義
+  #########################################################
+  ImageFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-image
+      RetentionInDays: 14
+
+  #########################################################
+  # 画像アップロード用Lambda関数のロールの定義
+  #########################################################
+  ImageFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-image
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-image
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-image:*
 
   #########################################################
   # Tenantsテーブルの定義

@@ -3,15 +3,19 @@ import json
 import boto3
 import logging
 import utils
+import uuid
+import base64
 from datetime import datetime
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
 sqs = boto3.client("sqs")
+s3 = boto3.client("s3")
 
 # 環境変数
 SPECIFICATIONS_TABLE_NAME = os.environ["SPECIFICATIONS_TABLE_NAME"]
 CREATE_SPECIFICATION_SQS_QUEUE_URL = os.environ["CREATE_SPECIFICATION_SQS_QUEUE_URL"]
+S3_BUCKET_SPECIFICATIONS = os.environ["S3_BUCKET_SPECIFICATIONS"]
 
 # スキーマの読み込み
 # def load_schema():
@@ -26,6 +30,7 @@ CREATE_SPECIFICATION_SQS_QUEUE_URL = os.environ["CREATE_SPECIFICATION_SQS_QUEUE_
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
@@ -56,7 +61,7 @@ def lambda_handler(event, context):
                 "body": json.dumps({"message": "tenant_id is required"})
             }
 
-        # リクエストボディをJSONとしてパース
+        # リクエストボディをパース
         body = json.loads(event.get("body", "{}"))
         
         # 数値をDecimal型に変換
@@ -68,16 +73,77 @@ def lambda_handler(event, context):
         expression_attribute_values = {}
         
         # 通常の更新項目を追加
-        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "status", "progress", "fit", "fabric", "main_production", "information"]))
+        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "status", "progress", "fit", "fabric", "sample", "main_production", "information"]))
         for item in update_items:
             update_expression += f"#{item} = :{item}, "
             expression_attribute_names[f"#{item}"] = item
             expression_attribute_values[f":{item}"] = utils.value_to_dynamo(body[item])
         
+        # oem_pointsの処理
+        if "oem_points" in body:
+            processed_oem_points = []
+            for oem_point in body["oem_points"]:
+                if oem_point.get("file"):
+                    try:
+                        # Base64デコード
+                        file_data = base64.b64decode(oem_point["file"]["content"])
+                        
+                        # ファイル名をUUIDで生成
+                        file_uuid = str(uuid.uuid4())
+                        
+                        # ファイル形式
+                        content_type = oem_point["file"]["type"]
+                        
+                        if "png" in content_type:
+                            file_extension = ".png"
+                        elif "jpeg" in content_type or "jpg" in content_type:
+                            file_extension = ".jpg"
+                        else:
+                            raise ValueError("Unsupported file type. Only PNG, JPEG, and JPG are allowed.")
+                        
+                        s3_key = f"{tenant_id}/{specification_id}/oem_points/{file_uuid}{file_extension}"
+                        
+                        # S3にファイルをアップロード
+                        s3.put_object(
+                            Bucket=S3_BUCKET_SPECIFICATIONS,
+                            Key=s3_key,
+                            Body=file_data,
+                            ContentType=content_type,
+                            ContentEncoding='base64'
+                        )
+                        
+                        # 処理済みのoem_pointを追加
+                        processed_oem_points.append({
+                            "oem_point": oem_point["oem_point"],
+                            "file": {
+                                "name": oem_point["file"]["name"],
+                                "key": s3_key
+                            }
+                        })
+                    except Exception as e:
+                        logger.error(f"Error processing file: {str(e)}")
+                        logger.error(f"File data that caused error: {oem_point.get('file')}")
+                        # ファイル処理に失敗した場合でも、oem_pointのテキストは保存
+                        processed_oem_points.append({
+                            "oem_point": oem_point["oem_point"]
+                        })
+                else:
+                    processed_oem_points.append({
+                        "oem_point": oem_point["oem_point"]
+                    })
+            
+            update_expression += "#oem_points = :oem_points, "
+            expression_attribute_names["#oem_points"] = "oem_points"
+            expression_attribute_values[":oem_points"] = utils.value_to_dynamo(processed_oem_points)
+        
         # updated_atを追加
         update_expression += "#updated_at = :updated_at"
         expression_attribute_names["#updated_at"] = "updated_at"
         expression_attribute_values[":updated_at"] = utils.value_to_dynamo(datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00"))
+
+        logger.info(f"update_expression: {update_expression}")
+        logger.info(f"expression_attribute_names: {expression_attribute_names}")
+        logger.info(f"expression_attribute_values: {expression_attribute_values}")
 
         # 仕様書情報を更新
         update_specification_response = dynamodb.update_item(

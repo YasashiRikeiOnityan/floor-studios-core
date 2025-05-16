@@ -1,10 +1,8 @@
 from boto3.dynamodb.types import TypeDeserializer, TypeSerializer
 import json
 from decimal import Decimal
-import base64
-
-import logging
-logger = logging.getLogger(__name__)
+import uuid
+import re
 
 def dynamo_to_python(dynamo_object: dict) -> dict:
     deserializer = TypeDeserializer()
@@ -28,7 +26,9 @@ def decimal_to_num(obj):
         return int(obj) if float(obj).is_integer() else float(obj)
     
 def num_to_decimal(value):
-    if isinstance(value, (int, float)):
+    if isinstance(value, bool):
+        return value
+    elif isinstance(value, (int, float)):
         return Decimal(str(value))
     elif isinstance(value, dict):
         return {k: num_to_decimal(v) for k, v in value.items()}
@@ -58,3 +58,13 @@ def get_response_headers() -> dict:
         "Content-Type": "application/json",
         "Access-Control-Allow-Origin": "*"
     }
+
+def is_valid_uuid(val):
+    try:
+        uuid.UUID(str(val))
+        return True
+    except ValueError:
+        return False
+
+def is_valid_image_key(key):
+    return re.match(r"^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$", key) is not None

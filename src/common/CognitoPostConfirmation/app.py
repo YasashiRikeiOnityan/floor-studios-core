@@ -3,6 +3,10 @@ import boto3
 import json
 from botocore.exceptions import ClientError
 import uuid
+import logging
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
 
 dynamodb = boto3.client("dynamodb")
 cognito = boto3.client('cognito-idp')
@@ -12,6 +16,9 @@ USERS_TABLE_NAME = os.environ["USERS_TABLE_NAME"]
 
 
 def lambda_handler(event, context):
+    logger.info(f"Event: {event}")
+    logger.info(f"Context: {context}")
+
     try:
         # Cognitoイベントから必要な情報を取得
         user_id = event["request"]["userAttributes"]["sub"]
@@ -39,11 +46,11 @@ def lambda_handler(event, context):
                 TableName=TENANTS_TABLE_NAME,
                 Item={
                     "tenant_id": {"S": tenant_id},
-                    "kind": {"S": "tenant"}
+                    "kind": {"S": "TENANT"}
                 }
             )
         except ClientError as e:
-            print(f"Error saving tenant: {str(e)}")
+            logger.error(f"Error saving tenant: {str(e)}")
             raise e
 
         # ユーザーテーブルに新規ユーザーを保存
@@ -57,13 +64,13 @@ def lambda_handler(event, context):
                 }
             )
         except ClientError as e:
-            print(f"Error saving user: {str(e)}")
+            logger.error(f"Error saving user: {str(e)}")
             raise e
 
         # イベントをそのまま返す
         return event
 
     except Exception as e:
-        print(f"Error in PostConfirmation trigger: {str(e)}")
-        print(f"Event: {json.dumps(event)}")
+        logger.error(f"Error in PostConfirmation trigger: {str(e)}")
+        logger.error(f"Event: {json.dumps(event)}")
         raise e
