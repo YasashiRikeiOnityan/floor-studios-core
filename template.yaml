@@ -794,6 +794,10 @@ Resources:
                 Resource: !GetAtt SpecificationsTable.Arn
               - Effect: Allow
                 Action:
+                  - s3:ListBucket
+                Resource: !GetAtt S3BucketSpecifications.Arn
+              - Effect: Allow
+                Action:
                   - s3:GetObject
                 Resource: !Sub ${S3BucketSpecifications.Arn}/*
               - Effect: Allow
@@ -831,12 +835,14 @@ Resources:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-create-specification
       CodeUri: src/common/CreateSpecification/
       Handler: app.lambda_handler
+      Runtime: nodejs18.x
       Environment:
         Variables:
           SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
           S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
-          S3_BUCKET_KEY_SPECIFICATION_TEMPLATE: template.xlsx
       Role: !GetAtt CreateSpecificationFunctionRole.Arn
+      Layers:
+        - !Ref ChromiumLayer
       Events:
         CreateSpecification:
           Type: SQS
@@ -844,6 +850,8 @@ Resources:
             Queue: !GetAtt CreateSpecificationSQSQueue.Arn
             BatchSize: 1
             Enabled: true
+      Timeout: 300
+      MemorySize: 2048
 
   #########################################################
   # CreateSpecificationFunctionのロググループの定義
@@ -1153,6 +1161,19 @@ Resources:
       ContentUri: src/layer
       CompatibleRuntimes:
         - python3.13
+      RetentionPolicy: Retain
+
+  #########################################################
+  # Chromium Layerの定義
+  #########################################################
+  ChromiumLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName: !Sub layer-${ProjectName}-${ProjectType}-${Environment}-chromium
+      Description: Chromium for Floor Studios Core
+      ContentUri: src/layer/chromium
+      CompatibleRuntimes:
+        - nodejs22.x
       RetentionPolicy: Retain
 
 Outputs:

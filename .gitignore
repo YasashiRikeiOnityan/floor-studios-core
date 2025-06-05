@@ -247,3 +247,5 @@ $RECYCLE.BIN/
 .aws-sam/
 
 .vscode/
+
+node_modules/

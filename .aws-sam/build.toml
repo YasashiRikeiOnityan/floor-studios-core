@@ -54,15 +54,6 @@ manifest_hash = ""
 packagetype = "Zip"
 functions = ["SpecificationsSpecificationIdDownloadFunction"]
 
-[function_build_definitions.500b5c75-385e-42e7-852e-b234e5fe56a9]
-codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/common/CreateSpecification"
-runtime = "python3.13"
-architecture = "x86_64"
-handler = "app.lambda_handler"
-manifest_hash = "960c02120959912db5f55c60e6cd3372"
-packagetype = "Zip"
-functions = ["CreateSpecificationFunction"]
-
 [function_build_definitions.a355e9c5-65ae-4574-adb3-5f31dbaf2b6f]
 codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/api/ApiSpecificationGroups"
 runtime = "python3.13"
@@ -89,5 +80,14 @@ handler = "app.lambda_handler"
 manifest_hash = ""
 packagetype = "Zip"
 functions = ["ImageFunction"]
+
+[function_build_definitions.1bfc976c-4a7d-41a2-8ed2-e842f64b030e]
+codeuri = "/Users/riku-minamiyama/floor-studios/repos/floor-studios-core/src/common/CreateSpecification"
+runtime = "nodejs18.x"
+architecture = "x86_64"
+handler = "app.lambda_handler"
+manifest_hash = "2f47a7df0680b1470f714ec48838c70a"
+packagetype = "Zip"
+functions = ["CreateSpecificationFunction"]
 
 [layer_build_definitions]

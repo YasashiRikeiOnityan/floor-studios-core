@@ -75,7 +75,7 @@ def lambda_handler(event, context):
             ClientMethod="get_object",
             Params={
                 "Bucket": S3_BUCKET_SPECIFICATIONS,
-                "Key": tenant_id + "/" + object
+                "Key": tenant_id + "/" + specification_id + "/" + object
             },
             ExpiresIn=3600
         )

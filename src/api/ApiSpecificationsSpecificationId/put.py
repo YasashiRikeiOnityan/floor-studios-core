@@ -73,7 +73,7 @@ def lambda_handler(event, context):
         expression_attribute_values = {}
         
         # 通常の更新項目を追加
-        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "status", "progress", "fit", "fabric", "sample", "main_production", "information"]))
+        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "status", "progress", "fit", "fabric", "tag", "care_label", "sample", "main_production", "information"]))
         for item in update_items:
             update_expression += f"#{item} = :{item}, "
             expression_attribute_names[f"#{item}"] = item
@@ -140,10 +140,6 @@ def lambda_handler(event, context):
         update_expression += "#updated_at = :updated_at"
         expression_attribute_names["#updated_at"] = "updated_at"
         expression_attribute_values[":updated_at"] = utils.value_to_dynamo(datetime.now().strftime("%Y-%m-%dT%H:%M:%S+00:00"))
-
-        logger.info(f"update_expression: {update_expression}")
-        logger.info(f"expression_attribute_names: {expression_attribute_names}")
-        logger.info(f"expression_attribute_values: {expression_attribute_values}")
 
         # 仕様書情報を更新
         update_specification_response = dynamodb.update_item(
