@@ -245,7 +245,10 @@ $RECYCLE.BIN/
 
 # AWS SAM
 .aws-sam/
+samconfig.toml
 
+# VS Code
 .vscode/
 
+# Node.js
 node_modules/

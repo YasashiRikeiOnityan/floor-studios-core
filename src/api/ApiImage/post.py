@@ -125,4 +125,4 @@ def lambda_handler(event, context):
 
     except Exception as e:
         logger.error(f"Error: {e}")
-        return utils.get_response_error(e)
+        return utils.get_response_internal_server_error()

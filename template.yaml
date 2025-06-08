@@ -908,6 +908,82 @@ Resources:
                   - sqs:GetQueueAttributes
                 Resource: !GetAtt CreateSpecificationSQSQueue.Arn
 
+  #########################################################
+  # SpecificationGroupsSpecificationGroupIdFunctionの定義
+  #########################################################
+  SpecificationGroupsSpecificationGroupIdFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+      CodeUri: src/api/ApiSpecificationGroupsSpecificationGroupId/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SPECIFICATION_GROUPS_TABLE_NAME: !Ref SpecificationGroupsTable
+      Role: !GetAtt SpecificationGroupsSpecificationGroupIdFunctionRole.Arn
+      Events:
+        PutSpecificationGroupsSpecificationGroupId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specificationgroups/{specification_group_id}
+            Method: put
+            Auth:
+              Authorizer: CognitoAuthorizer
+        DeleteSpecificationGroupsSpecificationGroupId:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specificationgroups/{specification_group_id}
+            Method: delete
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Layers:
+        - !Ref CommonLayer
+
+  #########################################################
+  # SpecificationGroupsSpecificationGroupIdFunctionのロググループの定義
+  #########################################################
+  SpecificationGroupsSpecificationGroupIdFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+      RetentionInDays: 14
+
+  #########################################################
+  # SpecificationGroupsSpecificationGroupIdFunctionのロールの定義
+  #########################################################
+  SpecificationGroupsSpecificationGroupIdFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                Resource: !GetAtt SpecificationGroupsTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id:*
+
+  #########################################################
+  # SpecificationGroupsFunctionの定義
+  #########################################################
   SpecificationGroupsFunction:
     Type: AWS::Serverless::Function
     Properties:
@@ -925,6 +1001,14 @@ Resources:
             RestApiId: !Ref FloorStudiosApi
             Path: /v1/specificationgroups
             Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+        PostSpecificationGroups:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specificationgroups
+            Method: post
             Auth:
               Authorizer: CognitoAuthorizer
       Layers:
@@ -961,6 +1045,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:CreateItem
                 Resource: !GetAtt SpecificationGroupsTable.Arn
               - Effect: Allow
                 Action:

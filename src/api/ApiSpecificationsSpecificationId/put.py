@@ -189,7 +189,10 @@ def lambda_handler(event, context):
 
         return {
             "statusCode": 200,
-            "headers": utils.get_response_headers()
+            "headers": utils.get_response_headers(),
+            "body": json.dumps({
+                "specification_id": specification_id
+            })
         }
 
     except Exception as e:
