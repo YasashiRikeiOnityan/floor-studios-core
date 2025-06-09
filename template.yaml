@@ -914,7 +914,7 @@ Resources:
   SpecificationGroupsSpecificationGroupIdFunction:
     Type: AWS::Serverless::Function
     Properties:
-      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specgroups-specgroup-id
       CodeUri: src/api/ApiSpecificationGroupsSpecificationGroupId/
       Handler: app.lambda_handler
       Environment:
@@ -947,7 +947,7 @@ Resources:
   SpecificationGroupsSpecificationGroupIdFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specgroups-specgroup-id
       RetentionInDays: 14
 
   #########################################################
@@ -956,7 +956,7 @@ Resources:
   SpecificationGroupsSpecificationGroupIdFunctionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specgroups-specgroup-id
       AssumeRolePolicyDocument:
         Version: "2012-10-17"
         Statement:
@@ -965,7 +965,7 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Policies:
-        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specgroups-specgroup-id
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
@@ -973,13 +973,14 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
+                  - dynamodb:DeleteItem
                 Resource: !GetAtt SpecificationGroupsTable.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup
                   - logs:CreateLogStream
                   - logs:PutLogEvents
-                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specification-groups-specification-group-id:*
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specgroups-specgroup-id:*
 
   #########################################################
   # SpecificationGroupsFunctionの定義
@@ -1045,7 +1046,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
-                  - dynamodb:CreateItem
+                  - dynamodb:PutItem
                 Resource: !GetAtt SpecificationGroupsTable.Arn
               - Effect: Allow
                 Action:

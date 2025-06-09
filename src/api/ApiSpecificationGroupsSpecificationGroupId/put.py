@@ -3,6 +3,7 @@ import boto3
 import json
 import logging
 import utils
+from datetime import datetime
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -40,6 +41,23 @@ def lambda_handler(event, context):
             return {
                 "statusCode": 400,
                 "body": json.dumps({"message": "tenant_id is required"})
+            }
+        
+        specification_group = dynamodb.get_item(
+            TableName=SPECIFICATION_GROUPS_TABLE_NAME,
+            Key={
+                "specification_group_id": {"S": specification_group_id},
+                "tenant_id": {"S": tenant_id}
+            }
+        )
+
+        if "Item" not in specification_group:
+            return {
+                "statusCode": 404,
+                "headers": utils.get_response_headers(),
+                "body": json.dumps({
+                    "message": "Specification Group not found"
+                })
             }
 
          # リクエストボディをパース
