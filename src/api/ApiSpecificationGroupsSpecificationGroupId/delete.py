@@ -8,6 +8,7 @@ import utils
 dynamodb = boto3.client("dynamodb")
 
 # 環境変数
+SPECIFICATIONS_TABLE_NAME = os.environ["SPECIFICATIONS_TABLE_NAME"]
 SPECIFICATION_GROUPS_TABLE_NAME = os.environ["SPECIFICATION_GROUPS_TABLE_NAME"]
 
 # ログの設定
@@ -46,7 +47,23 @@ def lambda_handler(event, context):
                 })
             }
         
-        # 仕様書の削除
+        # 仕様書グループに紐づく仕様書を取得
+        specifications = dynamodb.query(
+            TableName=SPECIFICATIONS_TABLE_NAME,
+            IndexName="SpecificationGroupIdIndex",
+            KeyConditionExpression="specification_group_id = :specification_group_id",
+            ExpressionAttributeValues={":specification_group_id": {"S": specification_group_id}}
+        )
+
+        # 仕様書グループに紐づく仕様書が存在する場合は400エラーを返す
+        if "Items" in specifications and len(specifications["Items"]) > 0:
+            return {
+                "statusCode": 400,
+                "headers": utils.get_response_headers(),
+                "body": json.dumps({"message": "Specification group has specifications"})
+            }
+
+        # 仕様書グループの削除
         response = dynamodb.delete_item(
             TableName=SPECIFICATION_GROUPS_TABLE_NAME,
             Key={

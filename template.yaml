@@ -206,6 +206,25 @@ Resources:
                 Resource: !Sub "arn:${AWS::Partition}:s3:::${S3BucketSpecifications}/public/*"
 
   #########################################################
+  # のS3バケット
+  #########################################################
+  S3BucketStaticAssets:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub bucket-${ProjectName}-${ProjectType}-${Environment}-static-assets
+      CorsConfiguration:
+        CorsRules:
+          - AllowedMethods:
+              - GET
+              - PUT
+              - DELETE
+            AllowedOrigins:
+              - https://${DomainName}
+              - http://localhost:3000
+            AllowedHeaders:
+              - "*"
+
+  #########################################################
   # 仕様書をテナントごとに保存するためのS3バケット
   #########################################################
   S3BucketSpecifications:
@@ -219,7 +238,8 @@ Resources:
               - PUT
               - DELETE
             AllowedOrigins:
-              - "*"
+              - https://${DomainName}
+              - http://localhost:3000
             AllowedHeaders:
               - "*"
 
@@ -919,6 +939,7 @@ Resources:
       Handler: app.lambda_handler
       Environment:
         Variables:
+          SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
           SPECIFICATION_GROUPS_TABLE_NAME: !Ref SpecificationGroupsTable
       Role: !GetAtt SpecificationGroupsSpecificationGroupIdFunctionRole.Arn
       Events:
@@ -969,6 +990,10 @@ Resources:
           PolicyDocument:
             Version: "2012-10-17"
             Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:Query
+                Resource: !GetAtt SpecificationsTable.Arn
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -1070,7 +1095,9 @@ Resources:
       Handler: app.lambda_handler
       Environment:
         Variables:
+          TENANT_TABLE_NAME: !Ref TenantsTable
           S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
+          S3_BUCKET_STATIC_ASSETS: !Ref S3BucketStaticAssets
       Role: !GetAtt ImageFunctionRole.Arn
       Events:
         PostImage:
@@ -1118,6 +1145,17 @@ Resources:
                   - s3:PutObject
                   - s3:DeleteObject
                 Resource: !Sub ${S3BucketSpecifications.Arn}/*
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:DeleteObject
+                Resource: !Sub ${S3BucketStaticAssets.Arn}/*
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                  - dynamodb:PutItem
+                Resource: !GetAtt TenantsTable.Arn
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup

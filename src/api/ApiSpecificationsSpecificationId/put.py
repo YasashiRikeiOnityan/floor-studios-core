@@ -73,68 +73,19 @@ def lambda_handler(event, context):
         expression_attribute_values = {}
         
         # 通常の更新項目を追加
-        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "status", "progress", "fit", "fabric", "tag", "care_label", "sample", "main_production", "information"]))
+        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "progress", "fit", "fabric", "tag", "care_label", "oem_points", "sample", "main_production", "information"]))
         for item in update_items:
             update_expression += f"#{item} = :{item}, "
             expression_attribute_names[f"#{item}"] = item
             expression_attribute_values[f":{item}"] = utils.value_to_dynamo(body[item])
-        
-        # oem_pointsの処理
-        if "oem_points" in body:
-            processed_oem_points = []
-            for oem_point in body["oem_points"]:
-                if oem_point.get("file"):
-                    try:
-                        # Base64デコード
-                        file_data = base64.b64decode(oem_point["file"]["content"])
-                        
-                        # ファイル名をUUIDで生成
-                        file_uuid = str(uuid.uuid4())
-                        
-                        # ファイル形式
-                        content_type = oem_point["file"]["type"]
-                        
-                        if "png" in content_type:
-                            file_extension = ".png"
-                        elif "jpeg" in content_type or "jpg" in content_type:
-                            file_extension = ".jpg"
-                        else:
-                            raise ValueError("Unsupported file type. Only PNG, JPEG, and JPG are allowed.")
-                        
-                        s3_key = f"{tenant_id}/{specification_id}/oem_points/{file_uuid}{file_extension}"
-                        
-                        # S3にファイルをアップロード
-                        s3.put_object(
-                            Bucket=S3_BUCKET_SPECIFICATIONS,
-                            Key=s3_key,
-                            Body=file_data,
-                            ContentType=content_type,
-                            ContentEncoding='base64'
-                        )
-                        
-                        # 処理済みのoem_pointを追加
-                        processed_oem_points.append({
-                            "oem_point": oem_point["oem_point"],
-                            "file": {
-                                "name": oem_point["file"]["name"],
-                                "key": s3_key
-                            }
-                        })
-                    except Exception as e:
-                        logger.error(f"Error processing file: {str(e)}")
-                        logger.error(f"File data that caused error: {oem_point.get('file')}")
-                        # ファイル処理に失敗した場合でも、oem_pointのテキストは保存
-                        processed_oem_points.append({
-                            "oem_point": oem_point["oem_point"]
-                        })
-                else:
-                    processed_oem_points.append({
-                        "oem_point": oem_point["oem_point"]
-                    })
-            
-            update_expression += "#oem_points = :oem_points, "
-            expression_attribute_names["#oem_points"] = "oem_points"
-            expression_attribute_values[":oem_points"] = utils.value_to_dynamo(processed_oem_points)
+
+        if body.get("status") is not None:
+            update_expression += "#status = :status, "
+            expression_attribute_names["#status"] = "status"
+            expression_attribute_values[":status"] = utils.value_to_dynamo(body["status"])
+            update_expression += "#tenant_id_status = :tenant_id_status, "
+            expression_attribute_names["#tenant_id_status"] = "tenant_id#status"
+            expression_attribute_values[":tenant_id_status"] = utils.value_to_dynamo(f"{tenant_id}#{body['status']}")
         
         # updated_atを追加
         update_expression += "#updated_at = :updated_at"

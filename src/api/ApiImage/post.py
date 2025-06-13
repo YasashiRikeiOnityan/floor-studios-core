@@ -9,7 +9,9 @@ import logging
 s3 = boto3.client("s3")
 
 # 環境変数
+TENANT_TABLE_NAME = os.environ["TENANT_TABLE_NAME"]
 S3_BUCKET_SPECIFICATIONS = os.environ["S3_BUCKET_SPECIFICATIONS"]
+S3_BUCKET_STATIC_ASSETS = os.environ["S3_BUCKET_STATIC_ASSETS"]
 
 # ログの設定
 logger = logging.getLogger(__name__)
@@ -105,6 +107,32 @@ def lambda_handler(event, context):
                     Params={
                         "Bucket": S3_BUCKET_SPECIFICATIONS,
                         "Key": f"{tenant_id}/{specification_id}/{key}"
+                    },
+                    ExpiresIn=3600
+                )
+        elif type == "brand_logo":
+            key = body.get("key")
+            method = body.get("method")
+            tenant_info = utils.get_tenant_info(tenant_id, TENANT_TABLE_NAME)
+            if tenant_info is None or tenant_info.get("logo_key") is None:
+                return {
+                    "statusCode": 400,
+                    "headers": utils.get_response_headers(),
+                    "body": json.dumps({"message": "Invalid request body"})
+                } 
+            if method == "get":
+                if not utils.is_valid_image_key(key):
+                    return {
+                        "statusCode": 400,
+                        "headers": utils.get_response_headers(),
+                        "body": json.dumps({"message": "Invalid request body"})
+                    }
+                # 取得、削除が可能なURLを生成
+                pre_signed_url = s3.generate_presigned_url(
+                    ClientMethod="get_object",
+                    Params={
+                        "Bucket": S3_BUCKET_STATIC_ASSETS,
+                        "Key": f"{tenant_id}/logo/{key}"
                     },
                     ExpiresIn=3600
                 )

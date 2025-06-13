@@ -3,6 +3,7 @@ import json
 from decimal import Decimal
 import uuid
 import re
+import boto3
 
 def dynamo_to_python(dynamo_object: dict) -> dict:
     deserializer = TypeDeserializer()
@@ -68,3 +69,17 @@ def is_valid_uuid(val):
 
 def is_valid_image_key(key):
     return re.match(r"^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$", key) is not None
+
+def get_tenant_info(tenant_id, table_name):
+    dynamodb = boto3.client("dynamodb")
+    response = dynamodb.get_item(
+        TableName=table_name,
+        Key={
+            "tenant_id": {"S": tenant_id},
+            "kind": {"S": "TENANT"}
+        }
+    )
+    if "Item" not in response:
+        return None
+    item = dynamo_to_python(response["Item"])
+    return item
