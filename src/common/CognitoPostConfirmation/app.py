@@ -20,6 +20,11 @@ def lambda_handler(event, context):
     logger.info(f"Context: {context}")
 
     try:
+        # 新規ユーザー登録時のみ処理を実行
+        if event["triggerSource"] != "PostConfirmation_ConfirmSignUp":
+            logger.info(f"Skipping non-signup trigger: {event['triggerSource']}")
+            return event
+
         # Cognitoイベントから必要な情報を取得
         user_id = event["request"]["userAttributes"]["sub"]
         email = event["request"]["userAttributes"]["email"]

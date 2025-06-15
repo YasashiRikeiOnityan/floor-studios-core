@@ -65,6 +65,48 @@ export const tShirtSpecification = async (specification, tenantId) => {
             }
         }
 
+        if (specification.oem_points?.length > 0) {
+            for (let i = 0; i < specification.oem_points.length; i++) {
+                const oem_point = specification.oem_points[i];
+                if (oem_point.file?.key) {
+                    const getObjectParams = {
+                        Bucket: S3_BUCKET_SPECIFICATIONS,
+                        Key: `${tenantId}/${specification.specification_id}/${oem_point.file.key}`
+                    };
+                    const response = await s3.send(new GetObjectCommand(getObjectParams));
+                    const imagePath = path.join("/tmp", oem_point.file.key);
+                    const fileStream = fs.createWriteStream(imagePath);
+                    response.Body.pipe(fileStream);
+                    
+                    // 画像の保存が完了するのを待つ
+                    await new Promise((resolve, reject) => {
+                        fileStream.on("finish", resolve);
+                        fileStream.on("error", reject);
+                    });
+                    
+                    oem_point.file.localPath = imagePath;
+                }
+            }
+        }
+
+        if (specification.tag?.description?.file?.key) {
+            const getObjectParams = {
+                Bucket: S3_BUCKET_SPECIFICATIONS,
+                Key: `${tenantId}/${specification.specification_id}/${specification.tag.description.file.key}`
+            };
+            const response = await s3.send(new GetObjectCommand(getObjectParams));
+            const imagePath = path.join("/tmp", specification.tag.description.file.key);
+            const fileStream = fs.createWriteStream(imagePath);
+            response.Body.pipe(fileStream);
+
+            // 画像の保存が完了するのを待つ
+            await new Promise((resolve, reject) => {
+                fileStream.on("finish", resolve);
+                fileStream.on("error", reject);
+            });
+            specification.tag.description.file.localPath = imagePath;
+        }
+
         // Chromiumの実行ファイルの状態を確認
         const executablePath = await chromium.executablePath();
         console.log("Chromium executable path:", executablePath);
@@ -329,6 +371,539 @@ export const tShirtSpecification = async (specification, tenantId) => {
             return document.documentElement.outerHTML;
         }, specification);
 
+        let tagNoLabelContent = undefined;
+        let tagLabelContent = undefined;
+
+        if (!specification.tag?.is_label || (specification.tag?.is_label && specification.tag?.send_labels && !specification.tag?.is_custom)) {
+            // tag_nolabel.htmlを読み込む
+            const tagNoLabelFilePath = path.resolve(__dirname, "html", "t-shirt", "tag_nolabel.html");
+            const tagNoLabelUrl = "file://" + tagNoLabelFilePath;
+            await page.goto(tagNoLabelUrl, {
+                waitUntil: "networkidle0",
+                timeout: 30000
+            });
+            
+            tagNoLabelContent = await page.evaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || 'Product Name';
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || 'Product Code';
+
+                if (spec.tag?.send_labels === true) {
+                    const noLabelRadioOnElements = document.querySelectorAll('[data-layer="no_label_radio_on"]');
+                    noLabelRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noLabelRadioOffElements = document.querySelectorAll('[data-layer="no_label_radio_off"]');
+                    noLabelRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sendLabelsRadioOnElements = document.querySelectorAll('[data-layer="send_labels_radio_on"]');
+                    sendLabelsRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sendLabelsRadioOffElements = document.querySelectorAll('[data-layer="send_labels_radio_off"]');
+                    sendLabelsRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                } else {
+                    const noLabelRadioOnElements = document.querySelectorAll('[data-layer="no_label_radio_on"]');
+                    noLabelRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const noLabelRadioOffElements = document.querySelectorAll('[data-layer="no_label_radio_off"]');
+                    noLabelRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sendLabelsRadioOnElements = document.querySelectorAll('[data-layer="send_labels_radio_on"]');
+                    sendLabelsRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sendLabelsRadioOffElements = document.querySelectorAll('[data-layer="send_labels_radio_off"]');
+                    sendLabelsRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                }
+                const description = document.querySelector('[data-layer="description"]');
+                description.textContent = spec.tag?.description?.description || "No description";
+                const descriptionImage = document.querySelector('[data-layer="description_image"]');
+                if (spec.tag?.description?.file?.localPath) {
+                    const imageUrl = spec.tag.description.file.localPath;
+                    // 画像をimageの枠に収まるようにリサイズする
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 280;
+                            const maxHeight = 214;
+                            descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                            descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                            descriptionImage.style.display = "flex";
+                            descriptionImage.style.justifyContent = "flex-start";
+                            descriptionImage.style.flexDirection = "column";
+                            descriptionImage.style.justifyContent = "flex-end";
+                            descriptionImage.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+                return document.documentElement.outerHTML;
+            }, specification);
+        } else {
+            // tag_label.htmlを読み込む
+            const tagLabelFilePath = path.resolve(__dirname, "html", "t-shirt", "tag_label.html");
+            const tagLabelUrl = "file://" + tagLabelFilePath;
+            await page.goto(tagLabelUrl, {
+                waitUntil: "networkidle0",
+                timeout: 30000
+            });
+
+            tagLabelContent = await page.evaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || 'Product Name';
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || 'Product Code';
+
+                if (spec.tag?.is_custom) {
+                    const noLabelRadioOnElements = document.querySelectorAll('[data-layer="no_label_radio_on"]');
+                    noLabelRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noLabelRadioOffElements = document.querySelectorAll('[data-layer="no_label_radio_off"]');
+                    noLabelRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sendLabelsRadioOnElements = document.querySelectorAll('[data-layer="send_labels_radio_on"]');
+                    sendLabelsRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sendLabelsRadioOffElements = document.querySelectorAll('[data-layer="send_labels_radio_off"]');
+                    sendLabelsRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const standardRadioOnElements = document.querySelectorAll('[data-layer="standard_radio_on"]');
+                    standardRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const standardRadioOffElements = document.querySelectorAll('[data-layer="standard_radio_off"]');
+                    standardRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const customRadioOnElements = document.querySelectorAll('[data-layer="custom_radio_on"]');
+                    customRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const customRadioOffElements = document.querySelectorAll('[data-layer="custom_radio_off"]');
+                    customRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                } else {
+                    const noLabelRadioOnElements = document.querySelectorAll('[data-layer="no_label_radio_on"]');
+                    noLabelRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noLabelRadioOffElements = document.querySelectorAll('[data-layer="no_label_radio_off"]');
+                    noLabelRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sendLabelsRadioOnElements = document.querySelectorAll('[data-layer="send_labels_radio_on"]');
+                    sendLabelsRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sendLabelsRadioOffElements = document.querySelectorAll('[data-layer="send_labels_radio_off"]');
+                    sendLabelsRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const standardRadioOnElements = document.querySelectorAll('[data-layer="standard_radio_on"]');
+                    standardRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const standardRadioOffElements = document.querySelectorAll('[data-layer="standard_radio_off"]');
+                    standardRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const customRadioOnElements = document.querySelectorAll('[data-layer="custom_radio_on"]');
+                    customRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const customRadioOffElements = document.querySelectorAll('[data-layer="custom_radio_off"]');
+                    customRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                }
+                if (spec.tag?.material === "Woven label") {
+                    const wovenLabelRadioOnElements = document.querySelectorAll('[data-layer="woven_label_radio_on"]');
+                    wovenLabelRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const wovenLabelRadioOffElements = document.querySelectorAll('[data-layer="woven_label_radio_off"]');
+                    wovenLabelRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const polyesterRadioOnElements = document.querySelectorAll('[data-layer="polyester_radio_on"]');
+                    polyesterRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const polyesterRadioOffElements = document.querySelectorAll('[data-layer="polyester_radio_off"]');
+                    polyesterRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const cottonCanvasRadioOnElements = document.querySelectorAll('[data-layer="cotton_canvas_radio_on"]');
+                    cottonCanvasRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const cottonCanvasRadioOffElements = document.querySelectorAll('[data-layer="cotton_canvas_radio_off"]');
+                    cottonCanvasRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                } else if (spec.tag?.material === "Polyester") {
+                    const wovenLabelRadioOnElements = document.querySelectorAll('[data-layer="woven_label_radio_on"]');
+                    wovenLabelRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const wovenLabelRadioOffElements = document.querySelectorAll('[data-layer="woven_label_radio_off"]');
+                    wovenLabelRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const polyesterRadioOnElements = document.querySelectorAll('[data-layer="polyester_radio_on"]');
+                    polyesterRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const polyesterRadioOffElements = document.querySelectorAll('[data-layer="polyester_radio_off"]');
+                    polyesterRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const cottonCanvasRadioOnElements = document.querySelectorAll('[data-layer="cotton_canvas_radio_on"]');
+                    cottonCanvasRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const cottonCanvasRadioOffElements = document.querySelectorAll('[data-layer="cotton_canvas_radio_off"]');
+                    cottonCanvasRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                } else if (spec.tag?.material === "Cotton Canvas") {
+                    const wovenLabelRadioOnElements = document.querySelectorAll('[data-layer="woven_label_radio_on"]');
+                    wovenLabelRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const wovenLabelRadioOffElements = document.querySelectorAll('[data-layer="woven_label_radio_off"]');
+                    wovenLabelRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const polyesterRadioOnElements = document.querySelectorAll('[data-layer="polyester_radio_on"]');
+                    polyesterRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const polyesterRadioOffElements = document.querySelectorAll('[data-layer="polyester_radio_off"]');
+                    polyesterRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const cottonCanvasRadioOnElements = document.querySelectorAll('[data-layer="cotton_canvas_radio_on"]');
+                    cottonCanvasRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const cottonCanvasRadioOffElements = document.querySelectorAll('[data-layer="cotton_canvas_radio_off"]');
+                    cottonCanvasRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                }
+
+                const labelColor = document.querySelector('[data-layer="label_color_pantone"]');
+                labelColor.textContent = spec.tag?.color?.pantone || "";
+                const labelColorHex = document.querySelector('[data-layer="label_color_hex"]');
+                labelColorHex.textContent = spec.tag?.color?.hex || "";
+                const colorFrame = document.querySelector('[data-layer="label_color_frame"]');
+                colorFrame.style.background = spec.tag?.color?.hex || "#D9D9D9";
+                const colorCircle = document.querySelector('[data-layer="label_color_circle"]');
+                colorCircle.style.background = spec.tag?.color?.hex || "#D9D9D9";
+
+                if (spec.tag?.label_style === "Inseam loop label") {
+                    const inseamLoopRadioOnElements = document.querySelectorAll('[data-layer="inseam_loop_radio_on"]');
+                    inseamLoopRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const inseamLoopRadioOffElements = document.querySelectorAll('[data-layer="inseam_loop_radio_off"]');
+                    inseamLoopRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const backRadioOnElements = document.querySelectorAll('[data-layer="back_radio_on"]');
+                    backRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const backRadioOffElements = document.querySelectorAll('[data-layer="back_radio_off"]');
+                    backRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sizeTagInseamElements = document.querySelectorAll('[data-layer="size_tag_inseam"]');
+                    sizeTagInseamElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sizeTagBackElements = document.querySelectorAll('[data-layer="size_tag_back"]');
+                    sizeTagBackElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const tshirtTagHorizontalElements = document.querySelectorAll('[data-layer="t-shirt_tag_horizontal"]');
+                    tshirtTagHorizontalElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const tshirtTagElements = document.querySelectorAll('[data-layer="t-shirt_tag"]');
+                    tshirtTagElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sizeTagInseamWidthElements = document.querySelector('[data-layer="size_tag_inseam_width"]');
+                    sizeTagInseamWidthElements.textContent = spec.tag?.label_width ? spec.tag?.label_width + " cm" : "3 cm";
+                    const sizeTagInseamHeightElements = document.querySelector('[data-layer="size_tag_inseam_height"]');
+                    sizeTagInseamHeightElements.textContent = spec.tag?.label_height ? spec.tag?.label_height + " cm" : "10 cm";
+                } else if (spec.tag?.label_style === "Label on the back") {
+                    const inseamLoopRadioOnElements = document.querySelectorAll('[data-layer="inseam_loop_radio_on"]');
+                    inseamLoopRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const inseamLoopRadioOffElements = document.querySelectorAll('[data-layer="inseam_loop_radio_off"]');
+                    inseamLoopRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const backRadioOnElements = document.querySelectorAll('[data-layer="back_radio_on"]');
+                    backRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const backRadioOffElements = document.querySelectorAll('[data-layer="back_radio_off"]');
+                    backRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sizeTagInseamElements = document.querySelectorAll('[data-layer="size_tag_inseam"]');
+                    sizeTagInseamElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const sizeTagBackElements = document.querySelectorAll('[data-layer="size_tag_back"]');
+                    sizeTagBackElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const tshirtTagHorizontalElements = document.querySelectorAll('[data-layer="t-shirt_tag_horizontal"]');
+                    tshirtTagHorizontalElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const tshirtTagElements = document.querySelectorAll('[data-layer="t-shirt_tag"]');
+                    tshirtTagElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const sizeTagBackWidthElements = document.querySelector('[data-layer="size_tag_back_width"]');
+                    sizeTagBackWidthElements.textContent = spec.tag?.label_width ? spec.tag?.label_width + " cm" : "4 cm";
+                    const sizeTagBackHeightElements = document.querySelector('[data-layer="size_tag_back_height"]');
+                    sizeTagBackHeightElements.textContent = spec.tag?.label_height ? spec.tag?.label_height + " cm" : "3 cm";
+                }
+
+                const description = document.querySelector('[data-layer="description"]');
+                description.textContent = spec.tag?.description?.description || "No description";
+                const descriptionImage = document.querySelector('[data-layer="description_image"]');
+                if (spec.tag?.description?.file?.localPath) {
+                    const imageUrl = spec.tag.description.file.localPath;
+                    // 画像をimageの枠に収まるようにリサイズする
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 205;
+                            const maxHeight = 202;
+                            descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                            descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                            descriptionImage.style.display = "flex";
+                            descriptionImage.style.justifyContent = "flex-start";
+                            descriptionImage.style.flexDirection = "column";
+                            descriptionImage.style.justifyContent = "flex-end";
+                            descriptionImage.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+                return document.documentElement.outerHTML;
+            }, specification);
+        }
+
+        // carelabel.htmlを読み込む
+        const carelabelFilePath = path.resolve(__dirname, "html", "t-shirt", "carelabel.html");
+        const carelabelUrl = "file://" + carelabelFilePath;
+        await page.goto(carelabelUrl, {
+            waitUntil: "networkidle0",
+            timeout: 30000
+        });
+
+        const carelabelContent = await page.evaluate(async (spec) => {
+            const productName = document.querySelector('[data-layer="product_name"]');
+            productName.textContent = spec.product_name || 'Product Name';
+            const productCode = document.querySelector('[data-layer="product_code"]');
+            productCode.textContent = spec.product_code || 'Product Code';
+
+            if (spec.care_label?.default_logo) {
+                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="brand_logo_radio_on"]');
+                defaultLogoRadioOnElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="brand_logo_radio_off"]');
+                defaultLogoRadioOffElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const noLogoRadioOnElements = document.querySelectorAll('[data-layer="no_logo_radio_on"]');
+                noLogoRadioOnElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const noLogoRadioOffElements = document.querySelectorAll('[data-layer="no_logo_radio_off"]');
+                noLogoRadioOffElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const uploadLogoRadioOnElements = document.querySelectorAll('[data-layer="upload_logo_radio_on"]');
+                uploadLogoRadioOnElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');
+                uploadLogoRadioOffElements.forEach(element => {
+                    element.style.display = "block";
+                });
+            } else if (!spec.care_label?.has_logo) {
+                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="brand_logo_radio_on"]');
+                defaultLogoRadioOnElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="brand_logo_radio_off"]');
+                defaultLogoRadioOffElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const noLogoRadioOnElements = document.querySelectorAll('[data-layer="no_logo_radio_on"]');
+                noLogoRadioOnElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const noLogoRadioOffElements = document.querySelectorAll('[data-layer="no_logo_radio_off"]');
+                noLogoRadioOffElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const uploadLogoRadioOnElements = document.querySelectorAll('[data-layer="upload_logo_radio_on"]');
+                uploadLogoRadioOnElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');
+                uploadLogoRadioOffElements.forEach(element => {
+                    element.style.display = "block";
+                });
+            } else {
+                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="brand_logo_radio_on"]');
+                defaultLogoRadioOnElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="brand_logo_radio_off"]');
+                defaultLogoRadioOffElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const noLogoRadioOnElements = document.querySelectorAll('[data-layer="no_logo_radio_on"]');
+                noLogoRadioOnElements.forEach(element => {
+                    element.style.display = "none";
+                });
+                const noLogoRadioOffElements = document.querySelectorAll('[data-layer="no_logo_radio_off"]');
+                noLogoRadioOffElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const uploadLogoRadioOnElements = document.querySelectorAll('[data-layer="upload_logo_radio_on"]');
+                uploadLogoRadioOnElements.forEach(element => {
+                    element.style.display = "block";
+                });
+                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');   
+                uploadLogoRadioOffElements.forEach(element => {
+                    element.style.display = "none";
+                });
+            }
+            const description = document.querySelector('[data-layer="description"]');
+            description.textContent = spec.care_label?.description?.description || 'No description';
+            const descriptionImage = document.querySelector('[data-layer="description_image"]');
+            if (spec.care_label?.description?.file?.localPath) {
+                const imageUrl = spec.care_label.description.file.localPath;
+                // 画像をimageの枠に収まるようにリサイズする
+                const img = new Image();
+                img.src = imageUrl;
+                await new Promise((resolve) => {
+                    img.onload = () => {
+                        const imageRatio = img.width / img.height;
+                        const maxWidth = 280;
+                        const maxHeight = 214;
+                        descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                        descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        descriptionImage.style.display = "flex";
+                        descriptionImage.style.flexDirection = "column";
+                        descriptionImage.style.justifyContent = "flex-end";
+                        descriptionImage.innerHTML = `<img src="${imageUrl}" />`;
+                        resolve();
+                    };
+                });
+            }
+            return document.documentElement.outerHTML;
+        }, specification);
+
+        // oem_points.htmlを読み込む
+        const oemPointsFilePath = path.resolve(__dirname, "html", "t-shirt", "oem_points.html");
+        const oemPointsUrl = "file://" + oemPointsFilePath;
+
+        await page.goto(oemPointsUrl, {
+            waitUntil: "networkidle0",
+            timeout: 30000
+        });
+
+        // oem_points.htmlのデータを設定
+        const oemPointsContent = await page.evaluate(async (spec) => {
+            const productName = document.querySelector('[data-layer="product_name"]');
+            productName.textContent = spec.product_name || 'Product Name';
+            const productCode = document.querySelector('[data-layer="product_code"]');
+            productCode.textContent = spec.product_code || 'Product Code';
+
+            // 素材データの設定
+            const oemPoints = spec.oem_points || [];
+            
+            // 各素材レイヤーの処理
+            for (let i = 1; i <= 3; i++) {
+                const oemPointLayer = document.querySelector(`[data-layer="oem_points-${i}"]`);
+                if (!oemPointLayer) continue;
+
+                if (i > oemPoints.length) {
+                    // 素材データがない場合はレイヤーを非表示
+                    oemPointLayer.style.display = 'none';
+                    continue;
+                }
+
+                const oemPoint = oemPoints[i - 1];
+                
+                // 各要素の設定
+                const elements = {
+                    description: oemPointLayer.querySelector('[data-layer="description"]'),
+                    description_image: oemPointLayer.querySelector('[data-layer="description_image"]')
+                };
+
+                // テキストコンテンツの設定
+                elements.description.textContent = oemPoint.description || 'No description';
+
+                if (oemPoint.file?.localPath) {
+                    const imageUrl = oemPoint.file.localPath;
+                    // 画像をimageの枠に収まるようにリサイズする
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 205;
+                            const maxHeight = 202;
+                            elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                            elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                            elements.description_image.style.display = "flex";
+                            elements.description_image.style.flexDirection = "column";
+                            elements.description_image.style.justifyContent = "flex-end";
+                            elements.description_image.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+            }
+
+            return document.documentElement.outerHTML;
+        }, specification);
+
         // sample.htmlを読み込む
         const sampleFilePath = path.resolve(__dirname, "html", "t-shirt", "sample.html");
         const sampleUrl = "file://" + sampleFilePath;
@@ -481,7 +1056,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
         }, specification);
 
         // 結合用のHTMLを作成
-        await page.evaluate((fitContent, materialsContent, sampleContent, informationContent) => {
+        await page.evaluate((fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, sampleContent, informationContent) => {
             const combinedHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -498,13 +1073,17 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 <body>
                     <div class="page">${fitContent}</div>
                     <div class="page">${materialsContent}</div>
+                    ${tagNoLabelContent ? `<div class="page">${tagNoLabelContent}</div>` : ""}
+                    ${tagLabelContent ? `<div class="page">${tagLabelContent}</div>` : ""}
+                    <div class="page">${carelabelContent}</div>
+                    <div class="page">${oemPointsContent}</div>
                     <div class="page">${sampleContent}</div>
                     <div class="page">${informationContent}</div>
                 </body>
                 </html>
             `;
             document.documentElement.innerHTML = combinedHtml;
-        }, fitContent, materialsContent, sampleContent, informationContent);
+        }, fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, sampleContent, informationContent);
 
         // 結合されたPDFを生成
         const pdfPath = path.join("/tmp", `${specification.specification_id}.pdf`);

@@ -219,7 +219,7 @@ Resources:
               - PUT
               - DELETE
             AllowedOrigins:
-              - https://${DomainName}
+              - !Sub https://${DomainName}
               - http://localhost:3000
             AllowedHeaders:
               - "*"
@@ -238,7 +238,7 @@ Resources:
               - PUT
               - DELETE
             AllowedOrigins:
-              - https://${DomainName}
+              - !Sub https://${DomainName}
               - http://localhost:3000
             AllowedHeaders:
               - "*"
@@ -645,7 +645,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
-                Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SpecificationsTable}/index/*
+                Resource: 
+                  - !GetAtt SpecificationsTable.Arn
+                  - !Sub ${SpecificationsTable.Arn}/index/TenantIdIndex
+                  - !Sub ${SpecificationsTable.Arn}/index/SpecificationGroupIdIndex
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -729,14 +732,17 @@ Resources:
             Statement:
               - Effect: Allow
                 Action:
+                  - dynamodb:Query
+                Resource: 
+                  - !GetAtt SpecificationsTable.Arn
+                  - !Sub ${SpecificationsTable.Arn}/index/TenantIdIndex
+                  - !Sub ${SpecificationsTable.Arn}/index/SpecificationGroupIdIndex
+              - Effect: Allow
+                Action:
                   - dynamodb:GetItem
                   - dynamodb:UpdateItem
                   - dynamodb:DeleteItem
                 Resource: !GetAtt SpecificationsTable.Arn
-              - Effect: Allow
-                Action:
-                  - dynamodb:GetItem
-                Resource: !GetAtt UsersTable.Arn
               - Effect: Allow
                 Action:
                   - sqs:SendMessage
@@ -993,7 +999,10 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
-                Resource: !GetAtt SpecificationsTable.Arn
+                Resource: 
+                  - !GetAtt SpecificationsTable.Arn
+                  - !Sub ${SpecificationsTable.Arn}/index/TenantIdIndex
+                  - !Sub ${SpecificationsTable.Arn}/index/SpecificationGroupIdIndex
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
@@ -1076,7 +1085,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:Query
-                Resource: !Sub arn:${AWS::Partition}:dynamodb:${AWS::Region}:${AWS::AccountId}:table/${SpecificationGroupsTable}/index/*
+                Resource: !Sub ${SpecificationGroupsTable.Arn}/index/TenantIdIndex
               - Effect: Allow
                 Action:
                   - logs:CreateLogGroup

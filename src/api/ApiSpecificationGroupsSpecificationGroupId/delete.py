@@ -55,10 +55,10 @@ def lambda_handler(event, context):
             ExpressionAttributeValues={":specification_group_id": {"S": specification_group_id}}
         )
 
-        # 仕様書グループに紐づく仕様書が存在する場合は400エラーを返す
+        # 仕様書グループに紐づく仕様書が存在する場合は409エラーを返す
         if "Items" in specifications and len(specifications["Items"]) > 0:
             return {
-                "statusCode": 400,
+                "statusCode": 409,
                 "headers": utils.get_response_headers(),
                 "body": json.dumps({"message": "Specification group has specifications"})
             }
