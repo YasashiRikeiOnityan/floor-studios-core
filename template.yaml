@@ -861,7 +861,7 @@ Resources:
       FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-create-specification
       CodeUri: src/common/CreateSpecification/
       Handler: app.lambda_handler
-      Runtime: nodejs18.x
+      Runtime: nodejs22.x
       Environment:
         Variables:
           SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
