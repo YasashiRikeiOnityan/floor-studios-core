@@ -3,7 +3,6 @@ import json
 import boto3
 import logging
 import utils
-import base64
 
 # AWSクライアント
 dynamodb = boto3.client("dynamodb")
@@ -17,15 +16,6 @@ S3_BUCKET_SPECIFICATIONS = os.environ["S3_BUCKET_SPECIFICATIONS"]
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
-# スキーマの読み込み
-# def load_schema():
-#     schema_path = os.path.join(os.path.dirname(__file__), "schema.yaml")
-#     with open(schema_path, "r") as f:
-#         schema = yaml.safe_load(f)
-#     return schema["paths"]["/v1/specifications/{specification_id}"]["get"]
-
-# スキーマの取得
-# response_schema = load_schema()["responses"]["200"]["content"]["application/json"]["schema"]
 
 def lambda_handler(event, context):
     logger.info(f"Received event: {event}")
@@ -77,6 +67,7 @@ def lambda_handler(event, context):
                 })
             }
 
+        # レスポンスに不要なデータを削除
         specification_item = response["Item"]
         specification_item.pop("tenant_id", None)
         specification_item.pop("tenant_id#status", None)

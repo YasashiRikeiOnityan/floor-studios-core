@@ -92,8 +92,7 @@ def lambda_handler(event, context):
         return {
             "statusCode": 200,
             "headers": utils.get_response_headers(),
-            "body": json.dumps({"url": response}),
-            "isBase64Encoded": True
+            "body": json.dumps({"url": response})
         }
 
     except Exception as e:

@@ -125,6 +125,13 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
         const page = await browser.newPage();
 
+        // ビューポートをA4サイズに設定
+        await page.setViewport({
+            width: 595,
+            height: 842,
+            deviceScaleFactor: 1
+        });
+
         // テンプレートファイルを読み込む
         const fitFilePath = path.resolve(__dirname, "html", "t-shirt", "fit.html");
         const fitUrl = "file://" + fitFilePath;
@@ -312,7 +319,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
             
             // 各素材レイヤーの処理
             for (let i = 1; i <= 3; i++) {
-                const materialLayer = document.querySelector(`[data-layer="material-${i}"]`);
+                const materialLayer = document.querySelector(`[data-layer="material_${i}"]`);
                 if (!materialLayer) continue;
 
                 if (i > materials.length) {
@@ -326,25 +333,15 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 // 各要素の設定
                 const elements = {
                     row_material: materialLayer.querySelector('[data-layer="row_material"]'),
-                    thickness: materialLayer.querySelector('[data-layer="thickness"]'),
-                    pantone: materialLayer.querySelector('[data-layer="pantone"]'),
-                    hex: materialLayer.querySelector('[data-layer="hex"]'),
+                    color_name: materialLayer.querySelector('[data-layer="color_name"]'),
                     description: materialLayer.querySelector('[data-layer="description"]'),
-                    colour_circle: materialLayer.querySelector('[data-layer="colour_circle"]'),
                     description_image: materialLayer.querySelector('[data-layer="description_image"]')
                 };
 
                 // テキストコンテンツの設定
                 elements.row_material.textContent = material.row_material || '';
-                elements.thickness.textContent = material.thickness || '';
-                elements.pantone.textContent = material.colourway?.pantone || '';
-                elements.hex.textContent = (material.colourway?.hex || '').toUpperCase();
+                elements.color_name.textContent = material.colourway?.pantone || '';
                 elements.description.textContent = material.description?.description || 'No description';
-
-                // カラーサークルの背景色設定
-                if (material.colourway?.hex) {
-                    elements.colour_circle.style.background = material.colourway.hex;
-                }
 
                 if (material.description?.file?.localPath) {
                     const imageUrl = material.description.file.localPath;

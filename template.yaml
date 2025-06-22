@@ -749,6 +749,10 @@ Resources:
                 Resource: !GetAtt CreateSpecificationSQSQueue.Arn
               - Effect: Allow
                 Action:
+                  - s3:ListBucket
+                Resource: !GetAtt S3BucketSpecifications.Arn
+              - Effect: Allow
+                Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:DeleteObject
@@ -832,6 +836,80 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                 Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-download:*
+
+
+  #########################################################
+  # specifications/{specificationId}/preview Lambda関数の定義
+  #########################################################
+  SpecificationsSpecificationIdPreviewFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-preview
+      CodeUri: src/api/ApiSpecificationsSpecificationIdPreview/
+      Handler: app.lambda_handler
+      Environment:
+        Variables:
+          SPECIFICATIONS_TABLE_NAME: !Ref SpecificationsTable
+          S3_BUCKET_SPECIFICATIONS: !Ref S3BucketSpecifications
+      Role: !GetAtt SpecificationsSpecificationIdPreviewFunctionRole.Arn
+      Events:
+        GetSpecificationsSpecificationIdPreview:
+          Type: Api
+          Properties:
+            RestApiId: !Ref FloorStudiosApi
+            Path: /v1/specifications/{specification_id}/preview
+            Method: get
+            Auth:
+              Authorizer: CognitoAuthorizer
+      Layers:
+        - !Ref CommonLayer
+
+  #########################################################
+  # specifications/{specificationId}/preview Lambda関数のロググループの定義
+  #########################################################
+  SpecificationsSpecificationIdPreviewFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-preview
+      RetentionInDays: 14
+
+  #########################################################
+  # specifications/{specificationId}/preview Lambda関数のロールの定義
+  #########################################################
+  SpecificationsSpecificationIdPreviewFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub role-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-preview
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: !Sub policy-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-preview
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem
+                Resource: !GetAtt SpecificationsTable.Arn
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                Resource: !GetAtt S3BucketSpecifications.Arn
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                Resource: !Sub ${S3BucketSpecifications.Arn}/*
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/function-${ProjectName}-${ProjectType}-${Environment}-specs-spec-id-preview:*
 
   #########################################################
   # CreateSpecificationSQSQueueの定義

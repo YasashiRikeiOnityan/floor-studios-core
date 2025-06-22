@@ -36,7 +36,7 @@ def lambda_handler(event, context):
         # リクエストボディをJSONとしてパース
         body = json.loads(event.get("body", "{}"))
 
-        update_items = list(filter(lambda x: x in body, ["tenant_name", "contact", "billing_address", "shipping_address"]))
+        update_items = list(filter(lambda x: x in body, ["tenant_name", "contact", "billing_information", "shipping_information"]))
 
         update_expression = "set " + ", ".join([f"#{item} = :{item}" for item in update_items])
 
