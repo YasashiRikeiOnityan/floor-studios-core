@@ -340,7 +340,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
                 // テキストコンテンツの設定
                 elements.row_material.textContent = material.row_material || '';
-                elements.color_name.textContent = material.colourway?.pantone || '';
+                elements.color_name.textContent = material.colourway?.color_name || '';
                 elements.description.textContent = material.description?.description || 'No description';
 
                 if (material.description?.file?.localPath) {
@@ -851,10 +851,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
             const productCode = document.querySelector('[data-layer="product_code"]');
             productCode.textContent = spec.product_code || 'Product Code';
 
-            // 素材データの設定
             const oemPoints = spec.oem_points || [];
             
-            // 各素材レイヤーの処理
+            // 各素材レイヤーの処理（最初の3つ）
             for (let i = 1; i <= 3; i++) {
                 const oemPointLayer = document.querySelector(`[data-layer="oem_points-${i}"]`);
                 if (!oemPointLayer) continue;
@@ -900,6 +899,73 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
             return document.documentElement.outerHTML;
         }, specification);
+
+        // 4つ目以降のoem_pointsがある場合の追加ページ
+        let oemPointsPlus = undefined;
+        const oemPoints = specification.oem_points || [];
+        
+        if (oemPoints.length > 3) {
+            await page.goto(oemPointsUrl, {
+                waitUntil: "networkidle0",
+                timeout: 30000
+            });
+
+            oemPointsPlus = await page.evaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || 'Product Name';
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || 'Product Code';
+
+                // 素材データの設定
+                const oemPoints = spec.oem_points || [];
+                
+                // 4つ目以降の素材レイヤーの処理（4-6番目）
+                for (let i = 4; i <= 6; i++) {
+                    const oemPointLayer = document.querySelector(`[data-layer="oem_points-${i - 3}"]`);
+                    if (!oemPointLayer) continue;
+
+                    if (i > oemPoints.length) {
+                        // 素材データがない場合はレイヤーを非表示
+                        oemPointLayer.style.display = 'none';
+                        continue;
+                    }
+
+                    const oemPoint = oemPoints[i - 1];
+                    
+                    // 各要素の設定
+                    const elements = {
+                        description: oemPointLayer.querySelector('[data-layer="description"]'),
+                        description_image: oemPointLayer.querySelector('[data-layer="description_image"]')
+                    };
+
+                    // テキストコンテンツの設定
+                    elements.description.textContent = oemPoint.description || 'No description';
+
+                    if (oemPoint.file?.localPath) {
+                        const imageUrl = oemPoint.file.localPath;
+                        // 画像をimageの枠に収まるようにリサイズする
+                        const img = new Image();
+                        img.src = imageUrl;
+                        await new Promise((resolve) => {
+                            img.onload = () => {
+                                const imageRatio = img.width / img.height;
+                                const maxWidth = 205;
+                                const maxHeight = 202;
+                                elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                                elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                                elements.description_image.style.display = "flex";
+                                elements.description_image.style.flexDirection = "column";
+                                elements.description_image.style.justifyContent = "flex-end";
+                                elements.description_image.innerHTML = `<img src="${imageUrl}" />`;
+                                resolve();
+                            };
+                        });
+                    }
+                }
+
+                return document.documentElement.outerHTML;
+            }, specification);
+        }
 
         // sample.htmlを読み込む
         const sampleFilePath = path.resolve(__dirname, "html", "t-shirt", "sample.html");
@@ -1025,35 +1091,51 @@ export const tShirtSpecification = async (specification, tenantId) => {
             contactPhoneNumber.textContent = spec.information?.contact?.phone_number || "";
             const contactEmail = document.querySelector('[data-layer="contact_email"]');
             contactEmail.textContent = spec.information?.contact?.email || "";
+            const shippingCompanyName = document.querySelector('[data-layer="shipping_company_name"]');
+            shippingCompanyName.textContent = spec.information?.shipping_information?.company_name || "";
+            const shippingName = document.querySelector('[data-layer="shipping_name"]');
+            shippingName.textContent = (spec.information?.shipping_information?.first_name || "") + (spec.information?.shipping_information?.first_name && spec.information?.shipping_information?.last_name ? " " : "") + (spec.information?.shipping_information?.last_name || "");
+            const shippingPhoneNumber = document.querySelector('[data-layer="shipping_phone_number"]');
+            shippingPhoneNumber.textContent = spec.information?.shipping_information?.phone_number || "";
+            const shippingEmail = document.querySelector('[data-layer="shipping_email"]');
+            shippingEmail.textContent = spec.information?.shipping_information?.email || "";
             const shippingZipCode = document.querySelector('[data-layer="shipping_zip_code"]');
-            shippingZipCode.textContent = spec.information?.shipping_address?.zip_code || "";
+            shippingZipCode.textContent = spec.information?.shipping_information?.zip_code || "";
             const shippingAddressLine2 = document.querySelector('[data-layer="shipping_address_line_2"]');
-            shippingAddressLine2.textContent = spec.information?.shipping_address?.address_line_2 || "";
+            shippingAddressLine2.textContent = spec.information?.shipping_information?.address_line_2 || "";
             const shippingAddressLine1 = document.querySelector('[data-layer="shipping_address_line_1"]');
-            shippingAddressLine1.textContent = spec.information?.shipping_address?.address_line_1 || "";
+            shippingAddressLine1.textContent = spec.information?.shipping_information?.address_line_1 || "";
             const shippingCity = document.querySelector('[data-layer="shipping_city"]');
-            shippingCity.textContent = spec.information?.shipping_address?.city || "";
+            shippingCity.textContent = spec.information?.shipping_information?.city || "";
             const shippingState = document.querySelector('[data-layer="shipping_state"]');
-            shippingState.textContent = spec.information?.shipping_address?.state || "";
+            shippingState.textContent = spec.information?.shipping_information?.state || "";
             const shippingCountry = document.querySelector('[data-layer="shipping_country"]');
-            shippingCountry.textContent = spec.information?.shipping_address?.country || "";
+            shippingCountry.textContent = spec.information?.shipping_information?.country || "";
+            const billingCompanyName = document.querySelector('[data-layer="billing_company_name"]');
+            billingCompanyName.textContent = spec.information?.billing_information?.company_name || "";
+            const billingName = document.querySelector('[data-layer="billing_name"]');
+            billingName.textContent = (spec.information?.billing_information?.first_name || "") + (spec.information?.billing_information?.first_name && spec.information?.billing_information?.last_name ? " " : "") + (spec.information?.billing_information?.last_name || "");
+            const billingPhoneNumber = document.querySelector('[data-layer="billing_phone_number"]');
+            billingPhoneNumber.textContent = spec.information?.billing_information?.phone_number || "";
+            const billingEmail = document.querySelector('[data-layer="billing_email"]');
+            billingEmail.textContent = spec.information?.billing_information?.email || "";
             const billingZipCode = document.querySelector('[data-layer="billing_zip_code"]');
-            billingZipCode.textContent = spec.information?.billing_address?.zip_code || "";
+            billingZipCode.textContent = spec.information?.billing_information?.zip_code || "";
             const billingAddressLine2 = document.querySelector('[data-layer="billing_address_line_2"]');
-            billingAddressLine2.textContent = spec.information?.billing_address?.address_line_2 || "";
+            billingAddressLine2.textContent = spec.information?.billing_information?.address_line_2 || "";
             const billingAddressLine1 = document.querySelector('[data-layer="billing_address_line_1"]');
-            billingAddressLine1.textContent = spec.information?.billing_address?.address_line_1 || "";
+            billingAddressLine1.textContent = spec.information?.billing_information?.address_line_1 || "";
             const billingCity = document.querySelector('[data-layer="billing_city"]');
-            billingCity.textContent = spec.information?.billing_address?.city || "";
+            billingCity.textContent = spec.information?.billing_information?.city || "";
             const billingState = document.querySelector('[data-layer="billing_state"]');
-            billingState.textContent = spec.information?.billing_address?.state || "";
+            billingState.textContent = spec.information?.billing_information?.state || "";
             const billingCountry = document.querySelector('[data-layer="billing_country"]');
-            billingCountry.textContent = spec.information?.billing_address?.country || "";
+            billingCountry.textContent = spec.information?.billing_information?.country || "";
             return document.documentElement.outerHTML;
         }, specification);
 
         // 結合用のHTMLを作成
-        await page.evaluate((fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, sampleContent, informationContent) => {
+        await page.evaluate((fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
             const combinedHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1074,13 +1156,14 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     ${tagLabelContent ? `<div class="page">${tagLabelContent}</div>` : ""}
                     <div class="page">${carelabelContent}</div>
                     <div class="page">${oemPointsContent}</div>
+                    ${oemPointsPlus ? `<div class="page">${oemPointsPlus}</div>` : ""}
                     <div class="page">${sampleContent}</div>
                     <div class="page">${informationContent}</div>
                 </body>
                 </html>
             `;
             document.documentElement.innerHTML = combinedHtml;
-        }, fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, sampleContent, informationContent);
+        }, fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent);
 
         // 結合されたPDFを生成
         const pdfPath = path.join("/tmp", `${specification.specification_id}.pdf`);
