@@ -31,7 +31,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
             const imagePath = path.join("/tmp", specification.fit.description.file.key);
             const fileStream = fs.createWriteStream(imagePath);
             response.Body.pipe(fileStream);
-            
+
             // 画像の保存が完了するのを待つ
             await new Promise((resolve, reject) => {
                 fileStream.on("finish", resolve);
@@ -65,6 +65,30 @@ export const tShirtSpecification = async (specification, tenantId) => {
             }
         }
 
+        if (specification.fabric?.sub_materials?.length > 0) {
+            for (let i = 0; i < specification.fabric.sub_materials.length; i++) {
+                const sub_material = specification.fabric.sub_materials[i];
+                if (sub_material.description?.file?.key) {
+                    const getObjectParams = {
+                        Bucket: S3_BUCKET_SPECIFICATIONS,
+                        Key: `${tenantId}/${specification.specification_id}/${sub_material.description.file.key}`
+                    };
+                    const response = await s3.send(new GetObjectCommand(getObjectParams));
+                    const imagePath = path.join("/tmp", sub_material.description.file.key);
+                    const fileStream = fs.createWriteStream(imagePath);
+                    response.Body.pipe(fileStream);
+
+                    // 画像の保存が完了するのを待つ
+                    await new Promise((resolve, reject) => {
+                        fileStream.on("finish", resolve);
+                        fileStream.on("error", reject);
+                    });
+
+                    sub_material.description.file.localPath = imagePath;
+                }
+            }
+        }
+
         if (specification.oem_points?.length > 0) {
             for (let i = 0; i < specification.oem_points.length; i++) {
                 const oem_point = specification.oem_points[i];
@@ -77,13 +101,13 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     const imagePath = path.join("/tmp", oem_point.file.key);
                     const fileStream = fs.createWriteStream(imagePath);
                     response.Body.pipe(fileStream);
-                    
+
                     // 画像の保存が完了するのを待つ
                     await new Promise((resolve, reject) => {
                         fileStream.on("finish", resolve);
                         fileStream.on("error", reject);
                     });
-                    
+
                     oem_point.file.localPath = imagePath;
                 }
             }
@@ -107,10 +131,46 @@ export const tShirtSpecification = async (specification, tenantId) => {
             specification.tag.description.file.localPath = imagePath;
         }
 
+        if (specification.sample?.sample_front?.key) {
+            const getObjectParams = {
+                Bucket: S3_BUCKET_SPECIFICATIONS,
+                Key: `${tenantId}/${specification.specification_id}/${specification.sample.sample_front.key}`
+            };
+            const response = await s3.send(new GetObjectCommand(getObjectParams));
+            const imagePath = path.join("/tmp", specification.sample.sample_front.key);
+            const fileStream = fs.createWriteStream(imagePath);
+            response.Body.pipe(fileStream);
+
+            // 画像の保存が完了するのを待つ
+            await new Promise((resolve, reject) => {
+                fileStream.on("finish", resolve);
+                fileStream.on("error", reject);
+            });
+            specification.sample.sample_front.localPath = imagePath;
+        }
+
+        if (specification.sample?.sample_back?.key) {
+            const getObjectParams = {
+                Bucket: S3_BUCKET_SPECIFICATIONS,
+                Key: `${tenantId}/${specification.specification_id}/${specification.sample.sample_back.key}`
+            };
+            const response = await s3.send(new GetObjectCommand(getObjectParams));
+            const imagePath = path.join("/tmp", specification.sample.sample_back.key);
+            const fileStream = fs.createWriteStream(imagePath);
+            response.Body.pipe(fileStream);
+
+            // 画像の保存が完了するのを待つ
+            await new Promise((resolve, reject) => {
+                fileStream.on("finish", resolve);
+                fileStream.on("error", reject);
+            });
+            specification.sample.sample_back.localPath = imagePath;
+        }
+
         // Chromiumの実行ファイルの状態を確認
         const executablePath = await chromium.executablePath();
         console.log("Chromium executable path:", executablePath);
-        
+
         if (!fs.existsSync(executablePath)) {
             throw new Error("Chromium executable does not exist");
         }
@@ -272,9 +332,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
             const shoulderToShoulderXl = document.querySelector('[data-layer="shoulder_to_shoulder_xl"]');
             shoulderToShoulderXl.textContent = spec.fit?.shoulder_to_shoulder?.xl || '';
             const shoulderToShoulderXxl = document.querySelector('[data-layer="shoulder_to_shoulder_xxl"]');
-            shoulderToShoulderXxl.textContent = spec.fit?.shoulder_to_shoulder?.xxl || '';          
+            shoulderToShoulderXxl.textContent = spec.fit?.shoulder_to_shoulder?.xxl || '';
             const description = document.querySelector('[data-layer="description"]');
-            description.textContent = spec.fit?.description?.description || 'No description';
+            description.textContent = spec.fit?.description?.description || '';
             const descriptionImage = document.querySelector('[data-layer="description_image"]');
             if (spec.fit?.description?.file?.localPath) {
                 const imageUrl = spec.fit.description.file.localPath;
@@ -308,7 +368,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
         });
 
         // materials.htmlのデータを設定
-        const materialsContent = await page.evaluate(async (spec) => {
+        const materialsContent1 = await page.evaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || 'Product Name';
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -316,57 +376,143 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
             // 素材データの設定
             const materials = spec.fabric?.materials || [];
-            
-            // 各素材レイヤーの処理
+            const subMaterials = spec.fabric?.sub_materials || [];
+
+            // materialsとsub_materialsを順番に配置
+            const allMaterials = [...materials.map(material => ({ ...material, type: 'material' })), ...subMaterials.map(subMaterial => ({ ...subMaterial, type: 'subMaterial' }))];
+
+            // 各素材レイヤーの処理（最大3つまで）
             for (let i = 1; i <= 3; i++) {
                 const materialLayer = document.querySelector(`[data-layer="material_${i}"]`);
                 if (!materialLayer) continue;
 
-                if (i > materials.length) {
-                    // 素材データがない場合はレイヤーを非表示
+                if (i <= allMaterials.length) {
+                    materialLayer.style.display = 'block';
+                    const material = allMaterials[i - 1];
+
+                    // 各要素の設定
+                    const elements = {
+                        row_material: materialLayer.querySelector('[data-layer="row_material"]'),
+                        color_name: materialLayer.querySelector('[data-layer="color_name"]'),
+                        description: materialLayer.querySelector('[data-layer="description"]'),
+                        description_image: materialLayer.querySelector('[data-layer="description_image"]')
+                    };
+
+                    // テキストコンテンツの設定
+                    elements.row_material.textContent = material.row_material || '';
+                    elements.color_name.textContent = material.colourway?.color_name || '';
+                    elements.description.textContent = material.description?.description || '';
+
+                    if (material.type === 'material') {
+                        materialLayer.querySelector('[data-layer="sub_material"]').style.display = 'none';
+                    } else if (material.type === 'subMaterial') {
+                        materialLayer.querySelector('[data-layer="material"]').style.display = 'none';
+                    }
+
+                    if (material.description?.file?.localPath) {
+                        const imageUrl = material.description.file.localPath;
+                        // 画像をimageの枠に収まるようにリサイズする
+                        const img = new Image();
+                        img.src = imageUrl;
+                        await new Promise((resolve) => {
+                            img.onload = () => {
+                                const imageRatio = img.width / img.height;
+                                const maxWidth = 205;
+                                const maxHeight = 202;
+                                elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                                elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                                elements.description_image.style.display = "flex";
+                                elements.description_image.style.flexDirection = "column";
+                                elements.description_image.style.justifyContent = "flex-end";
+                                elements.description_image.innerHTML = `<img src="${imageUrl}" />`;
+                                resolve();
+                            };
+                        });
+                    }
+                } else {
                     materialLayer.style.display = 'none';
-                    continue;
-                }
-
-                const material = materials[i - 1];
-                
-                // 各要素の設定
-                const elements = {
-                    row_material: materialLayer.querySelector('[data-layer="row_material"]'),
-                    color_name: materialLayer.querySelector('[data-layer="color_name"]'),
-                    description: materialLayer.querySelector('[data-layer="description"]'),
-                    description_image: materialLayer.querySelector('[data-layer="description_image"]')
-                };
-
-                // テキストコンテンツの設定
-                elements.row_material.textContent = material.row_material || '';
-                elements.color_name.textContent = material.colourway?.color_name || '';
-                elements.description.textContent = material.description?.description || 'No description';
-
-                if (material.description?.file?.localPath) {
-                    const imageUrl = material.description.file.localPath;
-                    // 画像をimageの枠に収まるようにリサイズする
-                    const img = new Image();
-                    img.src = imageUrl;
-                    await new Promise((resolve) => {
-                        img.onload = () => {
-                            const imageRatio = img.width / img.height;
-                            const maxWidth = 205;
-                            const maxHeight = 202;
-                            elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                            elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
-                            elements.description_image.style.display = "flex";
-                            elements.description_image.style.flexDirection = "column";
-                            elements.description_image.style.justifyContent = "flex-end";
-                            elements.description_image.innerHTML = `<img src="${imageUrl}" />`;
-                            resolve();
-                        };
-                    });
                 }
             }
 
             return document.documentElement.outerHTML;
         }, specification);
+
+        // materialsContent2の表示条件をチェック
+        const materials = specification.fabric?.materials || [];
+        const subMaterials = specification.fabric?.sub_materials || [];
+        const totalMaterials = materials.length + subMaterials.length;
+        let materialsContent2 = undefined;
+
+        if (totalMaterials > 3) {
+            await page.goto(materialsUrl, {
+                waitUntil: "networkidle0",
+                timeout: 30000
+            });
+
+            materialsContent2 = await page.evaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || 'Product Name';
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || 'Product Code';
+
+                // 素材データの設定
+                const materials = spec.fabric?.materials || [];
+                const subMaterials = spec.fabric?.sub_materials || [];
+
+                // 4つ目以降の素材を順番に配置
+                const allMaterials = [...materials, ...subMaterials];
+                const remainingMaterials = allMaterials.slice(3); // 4つ目以降
+
+                // 各素材レイヤーの処理（最大3つまで）
+                for (let i = 1; i <= 3; i++) {
+                    const materialLayer = document.querySelector(`[data-layer="material_${i}"]`);
+                    if (!materialLayer) continue;
+
+                    if (i <= remainingMaterials.length) {
+                        materialLayer.style.display = 'block';
+                        const material = remainingMaterials[i - 1];
+
+                        // 各要素の設定
+                        const elements = {
+                            row_material: materialLayer.querySelector('[data-layer="row_material"]'),
+                            color_name: materialLayer.querySelector('[data-layer="color_name"]'),
+                            description: materialLayer.querySelector('[data-layer="description"]'),
+                            description_image: materialLayer.querySelector('[data-layer="description_image"]')
+                        };
+
+                        // テキストコンテンツの設定
+                        elements.row_material.textContent = material.row_material || '';
+                        elements.color_name.textContent = material.colourway?.color_name || '';
+                        elements.description.textContent = material.description?.description || '';
+
+                        if (material.description?.file?.localPath) {
+                            const imageUrl = material.description.file.localPath;
+                            // 画像をimageの枠に収まるようにリサイズする
+                            const img = new Image();
+                            img.src = imageUrl;
+                            await new Promise((resolve) => {
+                                img.onload = () => {
+                                    const imageRatio = img.width / img.height;
+                                    const maxWidth = 205;
+                                    const maxHeight = 202;
+                                    elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                                    elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                                    elements.description_image.style.display = "flex";
+                                    elements.description_image.style.flexDirection = "column";
+                                    elements.description_image.style.justifyContent = "flex-end";
+                                    elements.description_image.innerHTML = `<img src="${imageUrl}" />`;
+                                    resolve();
+                                };
+                            });
+                        }
+                    } else {
+                        materialLayer.style.display = 'none';
+                    }
+                }
+
+                return document.documentElement.outerHTML;
+            }, specification);
+        }
 
         let tagNoLabelContent = undefined;
         let tagLabelContent = undefined;
@@ -379,7 +525,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 waitUntil: "networkidle0",
                 timeout: 30000
             });
-            
+
             tagNoLabelContent = await page.evaluate(async (spec) => {
                 const productName = document.querySelector('[data-layer="product_name"]');
                 productName.textContent = spec.product_name || 'Product Name';
@@ -432,7 +578,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     await new Promise((resolve) => {
                         img.onload = () => {
                             const imageRatio = img.width / img.height;
-                            const maxWidth = 280;
+                            const maxWidth = 235;
                             const maxHeight = 214;
                             descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
                             descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
@@ -606,14 +752,14 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     });
                 }
 
-                const labelColor = document.querySelector('[data-layer="label_color_pantone"]');
-                labelColor.textContent = spec.tag?.color?.pantone || "";
-                const labelColorHex = document.querySelector('[data-layer="label_color_hex"]');
-                labelColorHex.textContent = spec.tag?.color?.hex || "";
+                const labelColor = document.querySelector('[data-layer="label_color_name"]');
+                labelColor.textContent = spec.tag?.colourway?.color_name || "";
+                const labelColorCode = document.querySelector('[data-layer="label_color_code"]');
+                labelColorCode.textContent = spec.tag?.colourway?.color_code || "";
                 const colorFrame = document.querySelector('[data-layer="label_color_frame"]');
-                colorFrame.style.background = spec.tag?.color?.hex || "#D9D9D9";
+                colorFrame.style.background = spec.tag?.colourway?.color_code || "#D9D9D9";
                 const colorCircle = document.querySelector('[data-layer="label_color_circle"]');
-                colorCircle.style.background = spec.tag?.color?.hex || "#D9D9D9";
+                colorCircle.style.background = spec.tag?.colourway?.color_code || "#D9D9D9";
 
                 if (spec.tag?.label_style === "Inseam loop label") {
                     const inseamLoopRadioOnElements = document.querySelectorAll('[data-layer="inseam_loop_radio_on"]');
@@ -640,11 +786,11 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     sizeTagBackElements.forEach(element => {
                         element.style.display = "none";
                     });
-                    const tshirtTagHorizontalElements = document.querySelectorAll('[data-layer="t-shirt_tag_horizontal"]');
+                    const tshirtTagHorizontalElements = document.querySelectorAll('[data-layer="t-shirt_tag_inseam"]');
                     tshirtTagHorizontalElements.forEach(element => {
                         element.style.display = "block";
                     });
-                    const tshirtTagElements = document.querySelectorAll('[data-layer="t-shirt_tag"]');
+                    const tshirtTagElements = document.querySelectorAll('[data-layer="t-shirt_tag_back"]');
                     tshirtTagElements.forEach(element => {
                         element.style.display = "none";
                     });
@@ -677,11 +823,11 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     sizeTagBackElements.forEach(element => {
                         element.style.display = "block";
                     });
-                    const tshirtTagHorizontalElements = document.querySelectorAll('[data-layer="t-shirt_tag_horizontal"]');
+                    const tshirtTagHorizontalElements = document.querySelectorAll('[data-layer="t-shirt_tag_inseam"]');
                     tshirtTagHorizontalElements.forEach(element => {
                         element.style.display = "none";
                     });
-                    const tshirtTagElements = document.querySelectorAll('[data-layer="t-shirt_tag"]');
+                    const tshirtTagElements = document.querySelectorAll('[data-layer="t-shirt_tag_back"]');
                     tshirtTagElements.forEach(element => {
                         element.style.display = "block";
                     });
@@ -804,7 +950,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 uploadLogoRadioOnElements.forEach(element => {
                     element.style.display = "block";
                 });
-                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');   
+                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');
                 uploadLogoRadioOffElements.forEach(element => {
                     element.style.display = "none";
                 });
@@ -852,7 +998,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
             productCode.textContent = spec.product_code || 'Product Code';
 
             const oemPoints = spec.oem_points || [];
-            
+
             // 各素材レイヤーの処理（最初の3つ）
             for (let i = 1; i <= 3; i++) {
                 const oemPointLayer = document.querySelector(`[data-layer="oem_points-${i}"]`);
@@ -865,7 +1011,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 }
 
                 const oemPoint = oemPoints[i - 1];
-                
+
                 // 各要素の設定
                 const elements = {
                     description: oemPointLayer.querySelector('[data-layer="description"]'),
@@ -903,7 +1049,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
         // 4つ目以降のoem_pointsがある場合の追加ページ
         let oemPointsPlus = undefined;
         const oemPoints = specification.oem_points || [];
-        
+
         if (oemPoints.length > 3) {
             await page.goto(oemPointsUrl, {
                 waitUntil: "networkidle0",
@@ -918,7 +1064,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
                 // 素材データの設定
                 const oemPoints = spec.oem_points || [];
-                
+
                 // 4つ目以降の素材レイヤーの処理（4-6番目）
                 for (let i = 4; i <= 6; i++) {
                     const oemPointLayer = document.querySelector(`[data-layer="oem_points-${i - 3}"]`);
@@ -931,7 +1077,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     }
 
                     const oemPoint = oemPoints[i - 1];
-                    
+
                     // 各要素の設定
                     const elements = {
                         description: oemPointLayer.querySelector('[data-layer="description"]'),
@@ -982,8 +1128,8 @@ export const tShirtSpecification = async (specification, tenantId) => {
             productName.textContent = spec.product_name || "Product Name";
             const productCode = document.querySelector('[data-layer="product_code"]');
             productCode.textContent = spec.product_code || "Product Code";
-            const sample = spec.sample?.sample || false;
-            if (sample) {
+            const isSample = spec.sample?.is_sample || false;
+            if (isSample) {
                 const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
                 yesRadioOnElements.forEach(element => {
                     element.style.display = "block";
@@ -1018,20 +1164,126 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     element.style.display = "none";
                 });
             }
-            const sampleXxs = document.querySelector('[data-layer="sample_xxs"]');
-            sampleXxs.textContent = spec.sample?.quantity?.xxs || "0";
-            const sampleXs = document.querySelector('[data-layer="sample_xs"]');
-            sampleXs.textContent = spec.sample?.quantity?.xs || "0";
-            const sampleS = document.querySelector('[data-layer="sample_s"]');
-            sampleS.textContent = spec.sample?.quantity?.s || "0";
-            const sampleM = document.querySelector('[data-layer="sample_m"]');
-            sampleM.textContent = spec.sample?.quantity?.m || "0";
-            const sampleL = document.querySelector('[data-layer="sample_l"]');
-            sampleL.textContent = spec.sample?.quantity?.l || "0";
-            const sampleXl = document.querySelector('[data-layer="sample_xl"]');
-            sampleXl.textContent = spec.sample?.quantity?.xl || "0";
-            const sampleXxl = document.querySelector('[data-layer="sample_xxl"]');
-            sampleXxl.textContent = spec.sample?.quantity?.xxl || "0";
+            if (isSample) {
+                const sampleXxs = document.querySelector('[data-layer="sample_xxs"]');
+                sampleXxs.textContent = spec.sample?.quantity?.xxs || "0";
+                const sampleXs = document.querySelector('[data-layer="sample_xs"]');
+                sampleXs.textContent = spec.sample?.quantity?.xs || "0";
+                const sampleS = document.querySelector('[data-layer="sample_s"]');
+                sampleS.textContent = spec.sample?.quantity?.s || "0";
+                const sampleM = document.querySelector('[data-layer="sample_m"]');
+                sampleM.textContent = spec.sample?.quantity?.m || "0";
+                const sampleL = document.querySelector('[data-layer="sample_l"]');
+                sampleL.textContent = spec.sample?.quantity?.l || "0";
+                const sampleXl = document.querySelector('[data-layer="sample_xl"]');
+                sampleXl.textContent = spec.sample?.quantity?.xl || "0";
+                const sampleXxl = document.querySelector('[data-layer="sample_xxl"]');
+                sampleXxl.textContent = spec.sample?.quantity?.xxl || "0";
+                const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                checkBoxOn.style.display = "none";
+                const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                checkBoxOff.style.display = "none";
+                const canSendSample = document.querySelector('[data-layer="can_send_sample_text"]');
+                canSendSample.style.display = "none";
+            } else {
+                const canSendSampleText = document.querySelector('[data-layer="can_send_sample_text"]');
+                canSendSampleText.style.display = "block";
+                const sampleXxs = document.querySelector('[data-layer="sample_xxs"]');
+                sampleXxs.style.display = "none";
+                const sampleXs = document.querySelector('[data-layer="sample_xs"]');
+                sampleXs.style.display = "none";
+                const sampleS = document.querySelector('[data-layer="sample_s"]');
+                sampleS.style.display = "none";
+                const sampleM = document.querySelector('[data-layer="sample_m"]');
+                sampleM.style.display = "none";
+                const sampleL = document.querySelector('[data-layer="sample_l"]');
+                sampleL.style.display = "none";
+                const sampleXl = document.querySelector('[data-layer="sample_xl"]');
+                sampleXl.style.display = "none";
+                const sampleXxl = document.querySelector('[data-layer="sample_xxl"]');
+                sampleXxl.style.display = "none";
+                const sampleXxsFrame = document.querySelector('[data-layer="sample_xxs_frame"]');
+                sampleXxsFrame.style.display = "none";
+                const sampleXsFrame = document.querySelector('[data-layer="sample_xs_frame"]');
+                sampleXsFrame.style.display = "none";
+                const sampleSFrame = document.querySelector('[data-layer="sample_s_frame"]');
+                sampleSFrame.style.display = "none";
+                const sampleMFrame = document.querySelector('[data-layer="sample_m_frame"]');
+                sampleMFrame.style.display = "none";
+                const sampleLFrame = document.querySelector('[data-layer="sample_l_frame"]');
+                sampleLFrame.style.display = "none";
+                const sampleXlFrame = document.querySelector('[data-layer="sample_xl_frame"]');
+                sampleXlFrame.style.display = "none";
+                const sampleXxlFrame = document.querySelector('[data-layer="sample_xxl_frame"]');
+                sampleXxlFrame.style.display = "none";
+                const sampleXxsText = document.querySelector('[data-layer="sample_xxs_text"]');
+                sampleXxsText.style.display = "none";
+                const sampleXsText = document.querySelector('[data-layer="sample_xs_text"]');
+                sampleXsText.style.display = "none";
+                const sampleSText = document.querySelector('[data-layer="sample_s_text"]');
+                sampleSText.style.display = "none";
+                const sampleMText = document.querySelector('[data-layer="sample_m_text"]');
+                sampleMText.style.display = "none";
+                const sampleLText = document.querySelector('[data-layer="sample_l_text"]');
+                sampleLText.style.display = "none";
+                const sampleXlText = document.querySelector('[data-layer="sample_xl_text"]');
+                sampleXlText.style.display = "none";
+                const sampleXxlText = document.querySelector('[data-layer="sample_xxl_text"]');
+                sampleXxlText.style.display = "none";
+                if (spec.sample?.can_send_sample) {
+                    const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                    checkBoxOn.style.display = "block";
+                    const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                    checkBoxOff.style.display = "none";
+                } else {
+                    const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                    checkBoxOn.style.display = "none";
+                    const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                    checkBoxOff.style.display = "block";
+                }
+            }
+            if (spec.sample?.sample_front?.localPath) {
+                const sampleFront = document.querySelector('[data-layer="sample_front"]');
+                const imageUrl = spec.sample.sample_front.localPath;
+                // 画像をimageの枠に収まるようにリサイズする
+                const img = new Image();
+                img.src = imageUrl;
+                await new Promise((resolve) => {
+                    img.onload = () => {
+                        const imageRatio = img.width / img.height;
+                        const maxWidth = 238;
+                        const maxHeight = 138;
+                        sampleFront.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                        sampleFront.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        sampleFront.style.display = "flex";
+                        sampleFront.style.flexDirection = "column";
+                        sampleFront.style.justifyContent = "flex-end";
+                        sampleFront.innerHTML = `<img src="${imageUrl}" />`;
+                        resolve();
+                    };
+                });
+            }
+            if (spec.sample?.sample_back?.localPath) {
+                const sampleBack = document.querySelector('[data-layer="sample_back"]');
+                const imageUrl = spec.sample.sample_back.localPath;
+                // 画像をimageの枠に収まるようにリサイズする
+                const img = new Image();
+                img.src = imageUrl;
+                await new Promise((resolve) => {
+                    img.onload = () => {
+                        const imageRatio = img.width / img.height;
+                        const maxWidth = 238;
+                        const maxHeight = 138;
+                        sampleBack.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
+                        sampleBack.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        sampleBack.style.display = "flex";
+                        sampleBack.style.flexDirection = "column";
+                        sampleBack.style.justifyContent = "flex-end";
+                        sampleBack.innerHTML = `<img src="${imageUrl}" />`;
+                        resolve();
+                    };
+                });
+            }
             const deliveryDate = document.querySelector('[data-layer="date"]');
             deliveryDate.textContent = spec.main_production?.delivery_date || "";
             if (spec.main_production?.delivery_date) {
@@ -1135,7 +1387,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
         }, specification);
 
         // 結合用のHTMLを作成
-        await page.evaluate((fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
+        await page.evaluate((fitContent, materialsContent1, materialsContent2, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
             const combinedHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1151,7 +1403,8 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 </head>
                 <body>
                     <div class="page">${fitContent}</div>
-                    <div class="page">${materialsContent}</div>
+                    <div class="page">${materialsContent1}</div>
+                    ${materialsContent2 ? `<div class="page">${materialsContent2}</div>` : ""}
                     ${tagNoLabelContent ? `<div class="page">${tagNoLabelContent}</div>` : ""}
                     ${tagLabelContent ? `<div class="page">${tagLabelContent}</div>` : ""}
                     <div class="page">${carelabelContent}</div>
@@ -1163,7 +1416,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 </html>
             `;
             document.documentElement.innerHTML = combinedHtml;
-        }, fitContent, materialsContent, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent);
+        }, fitContent, materialsContent1, materialsContent2, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent);
 
         // 結合されたPDFを生成
         const pdfPath = path.join("/tmp", `${specification.specification_id}.pdf`);

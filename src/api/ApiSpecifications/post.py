@@ -52,15 +52,15 @@ def lambda_handler(event, context):
     body = json.loads(event.get("body", {}))
 
     # スキーマバリデーション
-    try:
-        validate(instance=body, schema=request_schema)
-    except ValidationError:
-        logger.error("Invalid request body")
-        return {
-            "statusCode": 400,
-            "headers": utils.get_response_headers(),
-            "body": json.dumps({"message": "Invalid request body"})
-        }
+    # try:
+    #     validate(instance=body, schema=request_schema)
+    # except ValidationError:
+    #     logger.error("Invalid request body")
+    #     return {
+    #         "statusCode": 400,
+    #         "headers": utils.get_response_headers(),
+    #         "body": json.dumps({"message": "Invalid request body"})
+    #     }
 
     try:
         # specification_idを生成
@@ -89,12 +89,13 @@ def lambda_handler(event, context):
             "specification_id": specification_id,
             "tenant_id": tenant_id,
             "tenant_id#status": tenant_id + "#" + "DRAFT",
-            "specification_group_id": body.get("specification_group_id", "NO_GROUP"),
+            "specification_group_id": body["specification_group_id"],
             "brand_name": body["brand_name"],
             "product_name": body["product_name"],
             "product_code": body["product_code"],
             "status": "DRAFT",
             "progress": "INITIAL",
+            "type": body["type"],
             "updated_by": {
                 "user_id": request_user_id,
                 "user_name": request_user_name
@@ -140,11 +141,11 @@ def lambda_handler(event, context):
         }
 
         # スキーマバリデーション
-        try:
-            validate(instance=response_data, schema=response_schema)
-        except ValidationError:
-            logger.error("Failed to validate response data")
-            return utils.get_response_internal_server_error()
+        # try:
+        #     validate(instance=response_data, schema=response_schema)
+        # except ValidationError:
+        #     logger.error("Failed to validate response data")
+        #     return utils.get_response_internal_server_error()
 
         return {
             "statusCode": 201,
