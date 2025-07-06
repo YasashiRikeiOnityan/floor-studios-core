@@ -346,8 +346,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                         const imageRatio = img.width / img.height;
                         const maxWidth = 280;
                         const maxHeight = 214;
-                        descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                        descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        if (imageRatio > 1) {
+                            if (maxWidth / imageRatio > maxHeight) {
+                                descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                descriptionImage.style.height = `${maxHeight}px`;
+                            } else {
+                                descriptionImage.style.width = `${maxWidth}px`;
+                                descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                            }
+                        } else {
+                            if (maxHeight * imageRatio > maxWidth) {
+                                descriptionImage.style.width = `${maxWidth}px`;
+                                descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                            } else {
+                                descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                descriptionImage.style.height = `${maxHeight}px`;
+                            }
+                        }
                         descriptionImage.style.display = "flex";
                         descriptionImage.style.justifyContent = "flex-start";
                         descriptionImage.innerHTML = `<img src="${imageUrl}" />`;
@@ -419,8 +434,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                                 const imageRatio = img.width / img.height;
                                 const maxWidth = 205;
                                 const maxHeight = 202;
-                                elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                                elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                                if (imageRatio > 1) {
+                                    if (maxWidth / imageRatio > maxHeight) {
+                                        elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                        elements.description_image.style.height = `${maxHeight}px`;
+                                    } else {
+                                        elements.description_image.style.width = `${maxWidth}px`;
+                                        elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                    }
+                                } else {
+                                    if (maxHeight * imageRatio > maxWidth) {
+                                        elements.description_image.style.width = `${maxWidth}px`;
+                                        elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                    } else {
+                                        elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                        elements.description_image.style.height = `${maxHeight}px`;
+                                    }
+                                }
                                 elements.description_image.style.display = "flex";
                                 elements.description_image.style.flexDirection = "column";
                                 elements.description_image.style.justifyContent = "flex-end";
@@ -460,7 +490,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 const subMaterials = spec.fabric?.sub_materials || [];
 
                 // 4つ目以降の素材を順番に配置
-                const allMaterials = [...materials, ...subMaterials];
+                const allMaterials = [...materials.map(material => ({ ...material, type: 'material' })), ...subMaterials.map(subMaterial => ({ ...subMaterial, type: 'subMaterial' }))];
                 const remainingMaterials = allMaterials.slice(3); // 4つ目以降
 
                 // 各素材レイヤーの処理（最大3つまで）
@@ -485,6 +515,12 @@ export const tShirtSpecification = async (specification, tenantId) => {
                         elements.color_name.textContent = material.colourway?.color_name || '';
                         elements.description.textContent = material.description?.description || '';
 
+                        if (material.type === 'material') {
+                            materialLayer.querySelector('[data-layer="sub_material"]').style.display = 'none';
+                        } else if (material.type === 'subMaterial') {
+                            materialLayer.querySelector('[data-layer="material"]').style.display = 'none';
+                        }
+
                         if (material.description?.file?.localPath) {
                             const imageUrl = material.description.file.localPath;
                             // 画像をimageの枠に収まるようにリサイズする
@@ -495,8 +531,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                                     const imageRatio = img.width / img.height;
                                     const maxWidth = 205;
                                     const maxHeight = 202;
-                                    elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                                    elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                                    if (imageRatio > 1) {
+                                        if (maxWidth / imageRatio > maxHeight) {
+                                            elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                            elements.description_image.style.height = `${maxHeight}px`;
+                                        } else {
+                                            elements.description_image.style.width = `${maxWidth}px`;
+                                            elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                        }
+                                    } else {
+                                        if (maxHeight * imageRatio > maxWidth) {
+                                            elements.description_image.style.width = `${maxWidth}px`;
+                                            elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                        } else {
+                                            elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                            elements.description_image.style.height = `${maxHeight}px`;
+                                        }
+                                    }
                                     elements.description_image.style.display = "flex";
                                     elements.description_image.style.flexDirection = "column";
                                     elements.description_image.style.justifyContent = "flex-end";
@@ -568,7 +619,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     });
                 }
                 const description = document.querySelector('[data-layer="description"]');
-                description.textContent = spec.tag?.description?.description || "No description";
+                description.textContent = spec.tag?.description?.description || "";
                 const descriptionImage = document.querySelector('[data-layer="description_image"]');
                 if (spec.tag?.description?.file?.localPath) {
                     const imageUrl = spec.tag.description.file.localPath;
@@ -580,8 +631,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                             const imageRatio = img.width / img.height;
                             const maxWidth = 235;
                             const maxHeight = 214;
-                            descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                            descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                    descriptionImage.style.height = `${maxHeight}px`;
+                                } else {
+                                    descriptionImage.style.width = `${maxWidth}px`;
+                                    descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                                }
+                            } else {
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    descriptionImage.style.width = `${maxWidth}px`;
+                                    descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                    descriptionImage.style.height = `${maxHeight}px`;
+                                }
+                            }
                             descriptionImage.style.display = "flex";
                             descriptionImage.style.justifyContent = "flex-start";
                             descriptionImage.style.flexDirection = "column";
@@ -754,12 +820,6 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
                 const labelColor = document.querySelector('[data-layer="label_color_name"]');
                 labelColor.textContent = spec.tag?.colourway?.color_name || "";
-                const labelColorCode = document.querySelector('[data-layer="label_color_code"]');
-                labelColorCode.textContent = spec.tag?.colourway?.color_code || "";
-                const colorFrame = document.querySelector('[data-layer="label_color_frame"]');
-                colorFrame.style.background = spec.tag?.colourway?.color_code || "#D9D9D9";
-                const colorCircle = document.querySelector('[data-layer="label_color_circle"]');
-                colorCircle.style.background = spec.tag?.colourway?.color_code || "#D9D9D9";
 
                 if (spec.tag?.label_style === "Inseam loop label") {
                     const inseamLoopRadioOnElements = document.querySelectorAll('[data-layer="inseam_loop_radio_on"]');
@@ -838,7 +898,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 }
 
                 const description = document.querySelector('[data-layer="description"]');
-                description.textContent = spec.tag?.description?.description || "No description";
+                description.textContent = spec.tag?.description?.description || "";
                 const descriptionImage = document.querySelector('[data-layer="description_image"]');
                 if (spec.tag?.description?.file?.localPath) {
                     const imageUrl = spec.tag.description.file.localPath;
@@ -850,8 +910,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                             const imageRatio = img.width / img.height;
                             const maxWidth = 205;
                             const maxHeight = 202;
-                            descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                            descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                    descriptionImage.style.height = `${maxHeight}px`;
+                                } else {
+                                    descriptionImage.style.width = `${maxWidth}px`;
+                                    descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                                }
+                            } else {
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    descriptionImage.style.width = `${maxWidth}px`;
+                                    descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                    descriptionImage.style.height = `${maxHeight}px`;
+                                }
+                            }
                             descriptionImage.style.display = "flex";
                             descriptionImage.style.justifyContent = "flex-start";
                             descriptionImage.style.flexDirection = "column";
@@ -880,11 +955,11 @@ export const tShirtSpecification = async (specification, tenantId) => {
             productCode.textContent = spec.product_code || 'Product Code';
 
             if (spec.care_label?.default_logo) {
-                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="brand_logo_radio_on"]');
+                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="logo_radio_on"]');
                 defaultLogoRadioOnElements.forEach(element => {
                     element.style.display = "block";
                 });
-                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="brand_logo_radio_off"]');
+                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="logo_radio_off"]');
                 defaultLogoRadioOffElements.forEach(element => {
                     element.style.display = "none";
                 });
@@ -894,22 +969,14 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 });
                 const noLogoRadioOffElements = document.querySelectorAll('[data-layer="no_logo_radio_off"]');
                 noLogoRadioOffElements.forEach(element => {
-                    element.style.display = "block";
-                });
-                const uploadLogoRadioOnElements = document.querySelectorAll('[data-layer="upload_logo_radio_on"]');
-                uploadLogoRadioOnElements.forEach(element => {
-                    element.style.display = "none";
-                });
-                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');
-                uploadLogoRadioOffElements.forEach(element => {
                     element.style.display = "block";
                 });
             } else if (!spec.care_label?.has_logo) {
-                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="brand_logo_radio_on"]');
+                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="logo_radio_on"]');
                 defaultLogoRadioOnElements.forEach(element => {
                     element.style.display = "none";
                 });
-                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="brand_logo_radio_off"]');
+                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="logo_radio_off"]');
                 defaultLogoRadioOffElements.forEach(element => {
                     element.style.display = "block";
                 });
@@ -920,21 +987,13 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 const noLogoRadioOffElements = document.querySelectorAll('[data-layer="no_logo_radio_off"]');
                 noLogoRadioOffElements.forEach(element => {
                     element.style.display = "none";
-                });
-                const uploadLogoRadioOnElements = document.querySelectorAll('[data-layer="upload_logo_radio_on"]');
-                uploadLogoRadioOnElements.forEach(element => {
-                    element.style.display = "none";
-                });
-                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');
-                uploadLogoRadioOffElements.forEach(element => {
-                    element.style.display = "block";
                 });
             } else {
-                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="brand_logo_radio_on"]');
+                const defaultLogoRadioOnElements = document.querySelectorAll('[data-layer="logo_radio_on"]');
                 defaultLogoRadioOnElements.forEach(element => {
                     element.style.display = "none";
                 });
-                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="brand_logo_radio_off"]');
+                const defaultLogoRadioOffElements = document.querySelectorAll('[data-layer="logo_radio_off"]');
                 defaultLogoRadioOffElements.forEach(element => {
                     element.style.display = "block";
                 });
@@ -945,18 +1004,11 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 const noLogoRadioOffElements = document.querySelectorAll('[data-layer="no_logo_radio_off"]');
                 noLogoRadioOffElements.forEach(element => {
                     element.style.display = "block";
-                });
-                const uploadLogoRadioOnElements = document.querySelectorAll('[data-layer="upload_logo_radio_on"]');
-                uploadLogoRadioOnElements.forEach(element => {
-                    element.style.display = "block";
-                });
-                const uploadLogoRadioOffElements = document.querySelectorAll('[data-layer="upload_logo_radio_off"]');
-                uploadLogoRadioOffElements.forEach(element => {
-                    element.style.display = "none";
                 });
             }
             const description = document.querySelector('[data-layer="description"]');
-            description.textContent = spec.care_label?.description?.description || 'No description';
+            const descriptionText = spec.care_label?.description?.description || "";
+            description.innerHTML = descriptionText.replace(/\n/g, '<br>');
             const descriptionImage = document.querySelector('[data-layer="description_image"]');
             if (spec.care_label?.description?.file?.localPath) {
                 const imageUrl = spec.care_label.description.file.localPath;
@@ -966,10 +1018,25 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 await new Promise((resolve) => {
                     img.onload = () => {
                         const imageRatio = img.width / img.height;
-                        const maxWidth = 280;
+                        const maxWidth = 300;
                         const maxHeight = 214;
-                        descriptionImage.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                        descriptionImage.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        if (imageRatio > 1) {
+                            if (maxWidth / imageRatio > maxHeight) {
+                                descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                descriptionImage.style.height = `${maxHeight}px`;
+                            } else {
+                                descriptionImage.style.width = `${maxWidth}px`;
+                                descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                            }
+                        } else {
+                            if (maxHeight * imageRatio > maxWidth) {
+                                descriptionImage.style.width = `${maxWidth}px`;
+                                descriptionImage.style.height = `${maxWidth / imageRatio}px`;
+                            } else {
+                                descriptionImage.style.width = `${maxHeight * imageRatio}px`;
+                                descriptionImage.style.height = `${maxHeight}px`;
+                            }
+                        }
                         descriptionImage.style.display = "flex";
                         descriptionImage.style.flexDirection = "column";
                         descriptionImage.style.justifyContent = "flex-end";
@@ -1019,7 +1086,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 };
 
                 // テキストコンテンツの設定
-                elements.description.textContent = oemPoint.description || 'No description';
+                elements.description.textContent = oemPoint.description || "";
 
                 if (oemPoint.file?.localPath) {
                     const imageUrl = oemPoint.file.localPath;
@@ -1031,8 +1098,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                             const imageRatio = img.width / img.height;
                             const maxWidth = 205;
                             const maxHeight = 202;
-                            elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                            elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                    elements.description_image.style.height = `${maxHeight}px`;
+                                } else {
+                                    elements.description_image.style.width = `${maxWidth}px`;
+                                    elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                }
+                            } else {
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    elements.description_image.style.width = `${maxWidth}px`;
+                                    elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                    elements.description_image.style.height = `${maxHeight}px`;
+                                }
+                            }
                             elements.description_image.style.display = "flex";
                             elements.description_image.style.flexDirection = "column";
                             elements.description_image.style.justifyContent = "flex-end";
@@ -1097,8 +1179,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                                 const imageRatio = img.width / img.height;
                                 const maxWidth = 205;
                                 const maxHeight = 202;
-                                elements.description_image.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                                elements.description_image.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                                if (imageRatio > 1) {
+                                    if (maxWidth / imageRatio > maxHeight) {
+                                        elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                        elements.description_image.style.height = `${maxHeight}px`;
+                                    } else {
+                                        elements.description_image.style.width = `${maxWidth}px`;
+                                        elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                    }
+                                } else {
+                                    if (maxHeight * imageRatio > maxWidth) {
+                                        elements.description_image.style.width = `${maxWidth}px`;
+                                        elements.description_image.style.height = `${maxWidth / imageRatio}px`;
+                                    } else {
+                                        elements.description_image.style.width = `${maxHeight * imageRatio}px`;
+                                        elements.description_image.style.height = `${maxHeight}px`;
+                                    }
+                                }
                                 elements.description_image.style.display = "flex";
                                 elements.description_image.style.flexDirection = "column";
                                 elements.description_image.style.justifyContent = "flex-end";
@@ -1242,8 +1339,8 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     checkBoxOff.style.display = "block";
                 }
             }
+            const sampleFront = document.querySelector('[data-layer="sample_front"]');
             if (spec.sample?.sample_front?.localPath) {
-                const sampleFront = document.querySelector('[data-layer="sample_front"]');
                 const imageUrl = spec.sample.sample_front.localPath;
                 // 画像をimageの枠に収まるようにリサイズする
                 const img = new Image();
@@ -1253,8 +1350,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                         const imageRatio = img.width / img.height;
                         const maxWidth = 238;
                         const maxHeight = 138;
-                        sampleFront.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                        sampleFront.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        if (imageRatio > 1) {
+                            if (maxWidth / imageRatio > maxHeight) {
+                                sampleFront.style.width = `${maxHeight * imageRatio}px`;
+                                sampleFront.style.height = `${maxHeight}px`;
+                            } else {
+                                sampleFront.style.width = `${maxWidth}px`;
+                                sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                            }
+                        } else {
+                            if (maxHeight * imageRatio > maxWidth) {
+                                sampleFront.style.width = `${maxWidth}px`;
+                                sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                            } else {
+                                sampleFront.style.width = `${maxHeight * imageRatio}px`;
+                                sampleFront.style.height = `${maxHeight}px`;
+                            }
+                        }
                         sampleFront.style.display = "flex";
                         sampleFront.style.flexDirection = "column";
                         sampleFront.style.justifyContent = "flex-end";
@@ -1263,8 +1375,8 @@ export const tShirtSpecification = async (specification, tenantId) => {
                     };
                 });
             }
+            const sampleBack = document.querySelector('[data-layer="sample_back"]');
             if (spec.sample?.sample_back?.localPath) {
-                const sampleBack = document.querySelector('[data-layer="sample_back"]');
                 const imageUrl = spec.sample.sample_back.localPath;
                 // 画像をimageの枠に収まるようにリサイズする
                 const img = new Image();
@@ -1274,8 +1386,23 @@ export const tShirtSpecification = async (specification, tenantId) => {
                         const imageRatio = img.width / img.height;
                         const maxWidth = 238;
                         const maxHeight = 138;
-                        sampleBack.style.width = `${imageRatio > 1 ? maxWidth : maxHeight * imageRatio}px`;
-                        sampleBack.style.height = `${imageRatio > 1 ? maxWidth / imageRatio : maxHeight}px`;
+                        if (imageRatio > 1) {
+                            if (maxWidth / imageRatio > maxHeight) {
+                                sampleBack.style.width = `${maxHeight * imageRatio}px`;
+                                sampleBack.style.height = `${maxHeight}px`;
+                            } else {
+                                sampleBack.style.width = `${maxWidth}px`;
+                                sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                            }
+                        } else {
+                            if (maxHeight * imageRatio > maxWidth) {
+                                sampleBack.style.width = `${maxWidth}px`;
+                                sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                            } else {
+                                sampleBack.style.width = `${maxHeight * imageRatio}px`;
+                                sampleBack.style.height = `${maxHeight}px`;
+                            }
+                        }
                         sampleBack.style.display = "flex";
                         sampleBack.style.flexDirection = "column";
                         sampleBack.style.justifyContent = "flex-end";
