@@ -1,6 +1,7 @@
 import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
 import { tShirtSpecification } from "./t-shirt.mjs";
+import { bottomsSpecification } from "./bottoms.mjs";
 
 // AWSクライアント
 const dynamodb = new DynamoDBClient();
@@ -43,6 +44,9 @@ export const lambda_handler = async (event, context) => {
     try {
         if (specification.type === "T-SHIRT") {
             return await tShirtSpecification(specification, tenantId);
+        } 
+        if (specification.type === "BOTTOMS") {
+            return await bottomsSpecification(specification, tenantId);
         }
         console.error("Unsupported product type:", specification.type);
         return { "statusCode": 400 };

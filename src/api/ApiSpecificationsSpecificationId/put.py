@@ -73,7 +73,7 @@ def lambda_handler(event, context):
         expression_attribute_values = {}
         
         # 通常の更新項目を追加
-        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "progress", "fit", "fabric", "tag", "care_label", "oem_points", "sample", "main_production", "information"]))
+        update_items = list(filter(lambda x: x in body, ["brand_name", "product_name", "product_code", "specification_group_id", "type", "progress", "fit", "fabric", "tag", "care_label", "patch", "oem_points", "sample", "main_production", "information"]))
         for item in update_items:
             update_expression += f"#{item} = :{item}, "
             expression_attribute_names[f"#{item}"] = item
