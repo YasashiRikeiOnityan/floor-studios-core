@@ -42,10 +42,10 @@ export const lambda_handler = async (event, context) => {
     console.info(specification);
 
     try {
-        if (specification.type === "T-SHIRT") {
-            return await tShirtSpecification(specification, tenantId);
+        if (["T-SHIRT", "LONG_SLEEVE", "CREWNECK", "HOODIE", "ZIP_HOODIE", "HALF_ZIP", "KNIT_CREWNECK"].includes(specification.type || "")) {
+            return await bottomsSpecification(specification, tenantId);
         } 
-        if (specification.type === "BOTTOMS") {
+        if (["SWEATPANTS1"].includes(specification.type || "")) {
             return await bottomsSpecification(specification, tenantId);
         }
         console.error("Unsupported product type:", specification.type);
