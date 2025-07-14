@@ -1,6 +1,6 @@
 import { DynamoDBClient, GetItemCommand } from "@aws-sdk/client-dynamodb";
 import { unmarshall } from "@aws-sdk/util-dynamodb";
-import { tShirtSpecification } from "./t-shirt.mjs";
+import { topsSpecification } from "./tops.mjs";
 import { bottomsSpecification } from "./bottoms.mjs";
 
 // AWSクライアント
@@ -43,13 +43,14 @@ export const lambda_handler = async (event, context) => {
 
     try {
         if (["T-SHIRT", "LONG_SLEEVE", "CREWNECK", "HOODIE", "ZIP_HOODIE", "HALF_ZIP", "KNIT_CREWNECK"].includes(specification.type || "")) {
-            return await bottomsSpecification(specification, tenantId);
-        } 
-        if (["SWEATPANTS1"].includes(specification.type || "")) {
-            return await bottomsSpecification(specification, tenantId);
+            await topsSpecification(specification, tenantId);
+        } else if (["SWEATPANTS1"].includes(specification.type || "")) {
+            await bottomsSpecification(specification, tenantId);
+        } else {
+            console.error("Unsupported product type:", specification.type);
+            return { "statusCode": 400 };
         }
-        console.error("Unsupported product type:", specification.type);
-        return { "statusCode": 400 };
+        return { "statusCode": 200 };
     } catch (error) {
         console.error("Error processing the event:", error);
         return { "statusCode": 500 };
