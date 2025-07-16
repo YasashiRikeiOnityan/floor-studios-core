@@ -94,7 +94,7 @@ def lambda_handler(event, context):
             "product_name": body["product_name"],
             "product_code": body["product_code"],
             "status": "DRAFT",
-            "progress": "INITIAL",
+            "progress": body["progress"],
             "type": body["type"],
             "updated_by": {
                 "user_id": request_user_id,
