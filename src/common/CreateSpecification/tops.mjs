@@ -137,6 +137,11 @@ export const topsSpecification = async (specification, tenantId) => {
         const fitUrl = "file://" + fitFilePath;
         await page.goto(fitUrl, { waitUntil: "networkidle0", timeout: 30000 });
         const fitContent = await page.evaluate(async (spec) => {
+            // CUSTOMIZEの場合はfit全体を避ける
+            if (spec.type === "CUSTOMIZE") {
+                return document.documentElement.innerHTML;
+            }
+
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -182,6 +187,64 @@ export const topsSpecification = async (specification, tenantId) => {
             sleeveLengthL.textContent = spec.fit?.sleeve_length?.l || "";
             const sleeveLengthXl = document.querySelector('[data-layer="sleeve_length_xl"]');
             sleeveLengthXl.textContent = spec.fit?.sleeve_length?.xl || "";
+
+            // spec.typeに基づいて画像を変更
+            const topsImage = document.querySelector('[data-layer="tops"]');
+            if (topsImage) {
+                let imageSrc = "./images/t-shirt.jpg"; // デフォルト
+                
+                if (spec.type === "T-SHIRT") {
+                    imageSrc = "./images/t-shirt.jpg";
+                } else if (spec.type === "LONG_SLEEVE") {
+                    imageSrc = "./images/long_sleeve.jpg";
+                } else if (spec.type === "CREWNECK") {
+                    imageSrc = "./images/crewneck.jpg";
+                } else if (spec.type === "HOODIE") {
+                    imageSrc = "./images/hoodie.jpg";
+                } else if (spec.type === "ZIP_HOODIE") {
+                    imageSrc = "./images/zip_hoodie.jpg";
+                } else if (spec.type === "HALF_ZIP") {
+                    imageSrc = "./images/half_zip.jpg";
+                } else if (spec.type === "KNIT_CREWNECK") {
+                    imageSrc = "./images/knit_crewneck.jpg";
+                } else if (spec.type === "JACKET") {
+                    imageSrc = "./images/jacket.jpg";
+                } else if (spec.type === "HEAVY_OUTER") {
+                    imageSrc = "./images/heavy_outer.jpg";
+                }
+                
+                // 画像をリサイズして表示
+                const img = new Image();
+                img.src = imageSrc;
+                await new Promise((resolve) => {
+                    img.onload = () => {
+                        const imageRatio = img.width / img.height;
+                        const maxWidth = 250;
+                        const maxHeight = 247;
+                        
+                        if (imageRatio > 1) {
+                            if (maxWidth / imageRatio > maxHeight) {
+                                topsImage.style.width = `${maxHeight * imageRatio}px`;
+                                topsImage.style.height = `${maxHeight}px`;
+                            } else {
+                                topsImage.style.width = `${maxWidth}px`;
+                                topsImage.style.height = `${maxWidth / imageRatio}px`;
+                            }
+                        } else {
+                            if (maxHeight * imageRatio > maxWidth) {
+                                topsImage.style.width = `${maxWidth}px`;
+                                topsImage.style.height = `${maxWidth / imageRatio}px`;
+                            } else {
+                                topsImage.style.width = `${maxHeight * imageRatio}px`;
+                                topsImage.style.height = `${maxHeight}px`;
+                            }
+                        }
+                        topsImage.src = imageSrc;
+                        resolve();
+                    };
+                });
+            }
+
             return document.documentElement.innerHTML;
         }, specification);
 

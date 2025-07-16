@@ -290,6 +290,50 @@ export const bottomsSpecification = async (specification, tenantId) => {
             aroundTheHemL.textContent = spec.fit?.around_the_hem?.l || "";
             const aroundTheHemXl = document.querySelector('[data-layer="around_the_hem_xl"]');
             aroundTheHemXl.textContent = spec.fit?.around_the_hem?.xl || "";
+
+            // spec.typeに基づいて画像を変更
+            const bottomsImage = document.querySelector('[data-layer="bottoms"]');
+            if (bottomsImage) {
+                let imageSrc = "./images/bottoms.jpg"; // デフォルト
+                
+                if (spec.type === "SWEATPANTS") {
+                    imageSrc = "./images/sweat_pants.jpg";
+                } else if (spec.type === "DENIMPANTS") {
+                    imageSrc = "./images/denim_pants.jpg";
+                }
+                
+                // 画像をリサイズして表示
+                const img = new Image();
+                img.src = imageSrc;
+                await new Promise((resolve) => {
+                    img.onload = () => {
+                        const imageRatio = img.width / img.height;
+                        const maxWidth = 242.11;
+                        const maxHeight = 333;
+                        
+                        if (imageRatio > 1) {
+                            if (maxWidth / imageRatio > maxHeight) {
+                                bottomsImage.style.width = `${maxHeight * imageRatio}px`;
+                                bottomsImage.style.height = `${maxHeight}px`;
+                            } else {
+                                bottomsImage.style.width = `${maxWidth}px`;
+                                bottomsImage.style.height = `${maxWidth / imageRatio}px`;
+                            }
+                        } else {
+                            if (maxHeight * imageRatio > maxWidth) {
+                                bottomsImage.style.width = `${maxWidth}px`;
+                                bottomsImage.style.height = `${maxWidth / imageRatio}px`;
+                            } else {
+                                bottomsImage.style.width = `${maxHeight * imageRatio}px`;
+                                bottomsImage.style.height = `${maxHeight}px`;
+                            }
+                        }
+                        bottomsImage.src = imageSrc;
+                        resolve();
+                    };
+                });
+            }
+
             return document.documentElement.innerHTML;
         }, specification);
 
