@@ -42,9 +42,9 @@ export const lambda_handler = async (event, context) => {
     console.info(specification);
 
     try {
-        if (["T-SHIRT", "LONG_SLEEVE", "CREWNECK", "HOODIE", "ZIP_HOODIE", "HALF_ZIP", "KNIT_CREWNECK"].includes(specification.type || "")) {
+        if (["T-SHIRT", "LONG_SLEEVE", "CREWNECK", "HOODIE", "ZIP_HOODIE", "HALF_ZIP", "KNIT_CREWNECK", "JACKET", "HEAVY_OUTER", "CUSTOMIZE"].includes(specification.type || "")) {
             await topsSpecification(specification, tenantId);
-        } else if (["SWEATPANTS1"].includes(specification.type || "")) {
+        } else if (["SWEATPANTS", "DENIMPANTS"].includes(specification.type || "")) {
             await bottomsSpecification(specification, tenantId);
         } else {
             console.error("Unsupported product type:", specification.type);
