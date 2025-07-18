@@ -19,6 +19,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const topsSpecification = async (specification, tenantId) => {
+    let browser = null;
+    let page = null;
+    
     try {
         // 画像を一時的にローカルに保存
         if (specification.fabric?.description?.file?.key) {
@@ -116,30 +119,75 @@ export const topsSpecification = async (specification, tenantId) => {
             });
             specification.sample.sample_back.localPath = imagePath;
         }
+        if (specification.custom_fit?.file?.key) {
+            const getObjectParams = {
+                Bucket: S3_BUCKET_SPECIFICATIONS,
+                Key: `${tenantId}/${specification.specification_id}/${specification.custom_fit.file.key}`
+            };
+            const response = await s3.send(new GetObjectCommand(getObjectParams));
+            const imagePath = path.join("/tmp", specification.custom_fit.file.key);
+            const fileStream = fs.createWriteStream(imagePath);
+            response.Body.pipe(fileStream);
+            await new Promise((resolve, reject) => {
+                fileStream.on("finish", resolve);
+                fileStream.on("error", reject);
+            });
+            specification.custom_fit.file.localPath = imagePath;
+            console.info(specification.custom_fit.file.localPath);
+        }
 
         // Chromiumの実行ファイルの状態を確認
         const executablePath = await chromium.executablePath();
         if (!fs.existsSync(executablePath)) {
             throw new Error("Chromium executable does not exist");
         }
-        const browser = await puppeteer.launch({
+        
+        // ブラウザの起動
+        browser = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: executablePath,
             headless: chromium.headless,
             ignoreHTTPSErrors: true
         });
-        const page = await browser.newPage();
+        
+        // ページの作成
+        page = await browser.newPage();
         await page.setViewport({ width: 595, height: 842, deviceScaleFactor: 1 });
+
+        // ページが閉じられていないかチェックする関数
+        const checkPageClosed = () => {
+            if (!page || page.isClosed()) {
+                throw new Error("Page has been closed");
+            }
+        };
+
+        // 安全なpage.evaluate実行関数
+        const safeEvaluate = async (evaluateFunc, ...args) => {
+            try {
+                return await page.evaluate(evaluateFunc, ...args);
+            } catch (error) {
+                if (error.message.includes("Promise was collected") || error.message.includes("Page has been closed")) {
+                    console.log("Page was closed, creating new page...");
+                    // 新しいページを作成
+                    page = await browser.newPage();
+                    await page.setViewport({ width: 595, height: 842, deviceScaleFactor: 1 });
+                    // 再度実行
+                    return await page.evaluate(evaluateFunc, ...args);
+                }
+                throw error;
+            }
+        };
 
         // fit.html (tops用)
         const fitFilePath = path.resolve(__dirname, "html", "tops", "fit.html");
         const fitUrl = "file://" + fitFilePath;
         await page.goto(fitUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        const fitContent = await page.evaluate(async (spec) => {
+        checkPageClosed();
+        const fitContent = await safeEvaluate(async (spec) => {
             // CUSTOMIZEの場合はfit全体を避ける
             if (spec.type === "CUSTOMIZE") {
-                return document.documentElement.innerHTML;
+                return undefined;
             }
 
             const productName = document.querySelector('[data-layer="product_name"]');
@@ -248,11 +296,99 @@ export const topsSpecification = async (specification, tenantId) => {
             return document.documentElement.innerHTML;
         }, specification);
 
+        // custom_fit.html (CUSTOMIZE用)
+        let customFitContent = undefined;
+        if (specification.type === "CUSTOMIZE") {
+            const customFitFilePath = path.resolve(__dirname, "html", "tops", "custom_fit.html");
+            const customFitUrl = "file://" + customFitFilePath;
+            await page.goto(customFitUrl, { waitUntil: "networkidle0", timeout: 30000 });
+            checkPageClosed();
+            customFitContent = await safeEvaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || "";
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || "";
+                
+                // カスタムフィットデータの設定
+                const customFitData = spec.custom_fit || {};
+                const keys = Object.keys(customFitData).filter(key => key !== 'file');
+                
+                // 最大9つのキーを1から順に設定
+                for (let i = 1; i <= 9; i++) {
+                    const key = keys[i - 1];
+                    if (key) {
+                        const data = customFitData[key];
+                        // サイズチャートの値を設定
+                        const freeElement = document.querySelector(`[data-layer="item_${i}_free"]`);
+                        if (freeElement) freeElement.textContent = data.free || "";
+                        const xsElement = document.querySelector(`[data-layer="item_${i}_xs"]`);
+                        if (xsElement) xsElement.textContent = data.xs || "";
+                        const sElement = document.querySelector(`[data-layer="item_${i}_s"]`);
+                        if (sElement) sElement.textContent = data.s || "";
+                        const mElement = document.querySelector(`[data-layer="item_${i}_m"]`);
+                        if (mElement) mElement.textContent = data.m || "";
+                        const lElement = document.querySelector(`[data-layer="item_${i}_l"]`);
+                        if (lElement) lElement.textContent = data.l || "";
+                        const xlElement = document.querySelector(`[data-layer="item_${i}_xl"]`);
+                        if (xlElement) xlElement.textContent = data.xl || "";
+                        
+                        // キー名を表示
+                        const keyElement = document.querySelector(`[data-layer="item_${i}"]`);
+                        if (keyElement) keyElement.textContent = key;
+                    } else {
+                        // データがない場合は要素を非表示
+                        const elements = document.querySelectorAll(`[data-layer^="item_${i}"]`);
+                        elements.forEach(element => {
+                            element.style.display = 'none';
+                        });
+                    }
+                }
+                
+                // 画像の設定
+                const customFitImage = document.querySelector('[data-layer="customize"]');
+                if (spec.custom_fit?.file?.localPath && customFitImage) {
+                    const imageUrl = spec.custom_fit.file.localPath;
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 250;
+                            const maxHeight = 247;
+                            
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    customFitImage.style.width = `${maxHeight * imageRatio}px`;
+                                    customFitImage.style.height = `${maxHeight}px`;
+                                } else {
+                                    customFitImage.style.width = `${maxWidth}px`;
+                                    customFitImage.style.height = `${maxWidth / imageRatio}px`;
+                                }
+                            } else {
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    customFitImage.style.width = `${maxWidth}px`;
+                                    customFitImage.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    customFitImage.style.width = `${maxHeight * imageRatio}px`;
+                                    customFitImage.style.height = `${maxHeight}px`;
+                                }
+                            }
+                            customFitImage.src = imageUrl;
+                            resolve();
+                        };
+                    });
+                }
+                
+                return document.documentElement.outerHTML;
+            }, specification);
+        }
+
         // fabric.html
         const fabricFilePath = path.resolve(__dirname, "html", "tops", "fabric.html");
         const fabricUrl = "file://" + fabricFilePath;
         await page.goto(fabricUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        const fabricContent = await page.evaluate(async (spec) => {
+        checkPageClosed();
+        const fabricContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -325,7 +461,8 @@ export const topsSpecification = async (specification, tenantId) => {
         const tagFilePath = path.resolve(__dirname, "html", "tops", "tag.html");
         const tagUrl = "file://" + tagFilePath;
         await page.goto(tagUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        const tagContent = await page.evaluate(async (spec) => {
+        checkPageClosed();
+        const tagContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -415,7 +552,8 @@ export const topsSpecification = async (specification, tenantId) => {
         const oemPointsFilePath = path.resolve(__dirname, "html", "tops", "oem_points.html");
         const oemPointsUrl = "file://" + oemPointsFilePath;
         await page.goto(oemPointsUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        const oemPointsContent = await page.evaluate(async (spec) => {
+        checkPageClosed();
+        const oemPointsContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || 'Product Name';
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -472,12 +610,14 @@ export const topsSpecification = async (specification, tenantId) => {
             }
             return document.documentElement.outerHTML;
         }, specification);
+        
         // 4つ目以降のoem_pointsがある場合の追加ページ
         let oemPointsPlus = undefined;
         const oemPoints = specification.oem_points || [];
         if (oemPoints.length > 3) {
             await page.goto(oemPointsUrl, { waitUntil: "networkidle0", timeout: 30000 });
-            oemPointsPlus = await page.evaluate(async (spec) => {
+            checkPageClosed();
+            oemPointsPlus = await safeEvaluate(async (spec) => {
                 const productName = document.querySelector('[data-layer="product_name"]');
                 productName.textContent = spec.product_name || 'Product Name';
                 const productCode = document.querySelector('[data-layer="product_code"]');
@@ -535,11 +675,13 @@ export const topsSpecification = async (specification, tenantId) => {
                 return document.documentElement.outerHTML;
             }, specification);
         }
+
         // sample.html
         const sampleFilePath = path.resolve(__dirname, "html", "tops", "sample.html");
         const sampleUrl = "file://" + sampleFilePath;
         await page.goto(sampleUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        const sampleContent = await page.evaluate(async (spec) => {
+        checkPageClosed();
+        const sampleContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "Product Name";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -749,8 +891,6 @@ export const topsSpecification = async (specification, tenantId) => {
                     element.style.display = "block";
                 });
             }
-            const mainProductionXxs = document.querySelector('[data-layer="main_production_xxs"]');
-            mainProductionXxs.textContent = spec.main_production?.quantity?.xxs || "0";
             const mainProductionXs = document.querySelector('[data-layer="main_production_xs"]');
             mainProductionXs.textContent = spec.main_production?.quantity?.xs || "0";
             const mainProductionS = document.querySelector('[data-layer="main_production_s"]');
@@ -761,15 +901,15 @@ export const topsSpecification = async (specification, tenantId) => {
             mainProductionL.textContent = spec.main_production?.quantity?.l || "0";
             const mainProductionXl = document.querySelector('[data-layer="main_production_xl"]');
             mainProductionXl.textContent = spec.main_production?.quantity?.xl || "0";
-            const mainProductionXxl = document.querySelector('[data-layer="main_production_xxl"]');
-            mainProductionXxl.textContent = spec.main_production?.quantity?.xxl || "0";
             return document.documentElement.outerHTML;
         }, specification);
+        
         // information.html
         const informationFilePath = path.resolve(__dirname, "html", "tops", "information.html");
         const informationUrl = "file://" + informationFilePath;
         await page.goto(informationUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        const informationContent = await page.evaluate(async (spec) => {
+        checkPageClosed();
+        const informationContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "Product Name";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -822,8 +962,10 @@ export const topsSpecification = async (specification, tenantId) => {
             billingCountry.textContent = spec.information?.billing_information?.country || "";
             return document.documentElement.outerHTML;
         }, specification);
+        
         // 結合用のHTMLを作成
-        await page.evaluate((fitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
+        checkPageClosed();
+        await safeEvaluate((fitContent, customFitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
             const combinedHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -838,7 +980,8 @@ export const topsSpecification = async (specification, tenantId) => {
                     </style>
                 </head>
                 <body>
-                    <div class="page">${fitContent}</div>
+                    ${fitContent ? `<div class="page">${fitContent}</div>` : ""}
+                    ${customFitContent ? `<div class="page">${customFitContent}</div>` : ""}
                     <div class="page">${fabricContent}</div>
                     <div class="page">${tagContent}</div>
                     <div class="page">${oemPointsContent}</div>
@@ -849,9 +992,11 @@ export const topsSpecification = async (specification, tenantId) => {
                 </html>
             `;
             document.documentElement.innerHTML = combinedHtml;
-        }, fitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent);
+        }, fitContent, customFitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent);
+
         // PDFを生成
         const pdfPath = path.join("/tmp", `${specification.specification_id}.pdf`);
+        checkPageClosed();
         await page.pdf({
             path: pdfPath,
             width: "595px",
@@ -859,7 +1004,14 @@ export const topsSpecification = async (specification, tenantId) => {
             printBackground: true,
             margin: { top: "0mm", bottom: "0mm", left: "0mm", right: "0mm" }
         });
-        await browser.close();
+        
+        // ブラウザを適切に閉じる
+        if (browser) {
+            await browser.close();
+            browser = null;
+            page = null;
+        }
+        
         // PDFをS3にアップロード
         const uploadParams = {
             Bucket: S3_BUCKET_SPECIFICATIONS,
@@ -867,6 +1019,7 @@ export const topsSpecification = async (specification, tenantId) => {
             Body: fs.createReadStream(pdfPath)
         };
         await s3.send(new PutObjectCommand(uploadParams));
+        
         // テーブルのファイル情報を更新
         const updateParams = {
             TableName: SPECIFICATIONS_TABLE_NAME,
@@ -888,6 +1041,19 @@ export const topsSpecification = async (specification, tenantId) => {
         return { "statusCode": 200 };
     } catch (error) {
         console.error("Error:", error);
+        
+        // エラーが発生した場合でもブラウザを適切に閉じる
+        try {
+            if (page && !page.isClosed()) {
+                await page.close();
+            }
+            if (browser) {
+                await browser.close();
+            }
+        } catch (closeError) {
+            console.error("Error closing browser:", closeError);
+        }
+        
         return { "statusCode": 500 };
     }
 }

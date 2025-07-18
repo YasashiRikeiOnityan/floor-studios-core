@@ -19,6 +19,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export const tShirtSpecification = async (specification, tenantId) => {
+    let browser = null;
+    let page = null;
+    
     try {
         // 画像を一時的にローカルに保存
         if (specification.fit?.description?.file?.key) {
@@ -175,7 +178,8 @@ export const tShirtSpecification = async (specification, tenantId) => {
             throw new Error("Chromium executable does not exist");
         }
 
-        const browser = await puppeteer.launch({
+        // ブラウザの起動
+        browser = await puppeteer.launch({
             args: chromium.args,
             defaultViewport: chromium.defaultViewport,
             executablePath: executablePath,
@@ -183,7 +187,32 @@ export const tShirtSpecification = async (specification, tenantId) => {
             ignoreHTTPSErrors: true
         });
 
-        const page = await browser.newPage();
+        // ページの作成
+        page = await browser.newPage();
+        
+        // ページが閉じられていないかチェックする関数
+        const checkPageClosed = () => {
+            if (!page || page.isClosed()) {
+                throw new Error("Page has been closed");
+            }
+        };
+
+        // 安全なpage.evaluate実行関数
+        const safeEvaluate = async (evaluateFunc, ...args) => {
+            try {
+                return await page.evaluate(evaluateFunc, ...args);
+            } catch (error) {
+                if (error.message.includes("Promise was collected") || error.message.includes("Page has been closed")) {
+                    console.log("Page was closed, creating new page...");
+                    // 新しいページを作成
+                    page = await browser.newPage();
+                    await page.setViewport({ width: 595, height: 842, deviceScaleFactor: 1 });
+                    // 再度実行
+                    return await page.evaluate(evaluateFunc, ...args);
+                }
+                throw error;
+            }
+        };
 
         // ビューポートをA4サイズに設定
         await page.setViewport({
@@ -200,9 +229,10 @@ export const tShirtSpecification = async (specification, tenantId) => {
             waitUntil: "networkidle0",
             timeout: 30000
         });
+        checkPageClosed();
 
         // fit.htmlのコンテンツを取得
-        const fitContent = await page.evaluate(async (spec) => {
+        const fitContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || 'Product Name';
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -381,9 +411,10 @@ export const tShirtSpecification = async (specification, tenantId) => {
             waitUntil: "networkidle0",
             timeout: 30000
         });
+        checkPageClosed();
 
         // materials.htmlのデータを設定
-        const materialsContent1 = await page.evaluate(async (spec) => {
+        const materialsContent1 = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || 'Product Name';
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -478,8 +509,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 waitUntil: "networkidle0",
                 timeout: 30000
             });
+            checkPageClosed();
 
-            materialsContent2 = await page.evaluate(async (spec) => {
+            materialsContent2 = await safeEvaluate(async (spec) => {
                 const productName = document.querySelector('[data-layer="product_name"]');
                 productName.textContent = spec.product_name || 'Product Name';
                 const productCode = document.querySelector('[data-layer="product_code"]');
@@ -576,8 +608,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 waitUntil: "networkidle0",
                 timeout: 30000
             });
+            checkPageClosed();
 
-            tagNoLabelContent = await page.evaluate(async (spec) => {
+            tagNoLabelContent = await safeEvaluate(async (spec) => {
                 const productName = document.querySelector('[data-layer="product_name"]');
                 productName.textContent = spec.product_name || 'Product Name';
                 const productCode = document.querySelector('[data-layer="product_code"]');
@@ -667,8 +700,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 waitUntil: "networkidle0",
                 timeout: 30000
             });
+            checkPageClosed();
 
-            tagLabelContent = await page.evaluate(async (spec) => {
+            tagLabelContent = await safeEvaluate(async (spec) => {
                 const productName = document.querySelector('[data-layer="product_name"]');
                 productName.textContent = spec.product_name || 'Product Name';
                 const productCode = document.querySelector('[data-layer="product_code"]');
@@ -947,8 +981,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
             waitUntil: "networkidle0",
             timeout: 30000
         });
+        checkPageClosed();
 
-        const carelabelContent = await page.evaluate(async (spec) => {
+        const carelabelContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || 'Product Name';
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -1056,9 +1091,10 @@ export const tShirtSpecification = async (specification, tenantId) => {
             waitUntil: "networkidle0",
             timeout: 30000
         });
+        checkPageClosed();
 
         // oem_points.htmlのデータを設定
-        const oemPointsContent = await page.evaluate(async (spec) => {
+        const oemPointsContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || 'Product Name';
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -1137,8 +1173,9 @@ export const tShirtSpecification = async (specification, tenantId) => {
                 waitUntil: "networkidle0",
                 timeout: 30000
             });
+            checkPageClosed();
 
-            oemPointsPlus = await page.evaluate(async (spec) => {
+            oemPointsPlus = await safeEvaluate(async (spec) => {
                 const productName = document.querySelector('[data-layer="product_name"]');
                 productName.textContent = spec.product_name || 'Product Name';
                 const productCode = document.querySelector('[data-layer="product_code"]');
@@ -1218,9 +1255,10 @@ export const tShirtSpecification = async (specification, tenantId) => {
             waitUntil: "networkidle0",
             timeout: 30000
         });
+        checkPageClosed();
 
         // sample.htmlのデータを設定
-        const sampleContent = await page.evaluate(async (spec) => {
+        const sampleContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "Product Name";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -1457,9 +1495,10 @@ export const tShirtSpecification = async (specification, tenantId) => {
             waitUntil: "networkidle0",
             timeout: 30000
         });
+        checkPageClosed();
 
         // information.htmlのデータを設定
-        const informationContent = await page.evaluate(async (spec) => {
+        const informationContent = await safeEvaluate(async (spec) => {
             const productName = document.querySelector('[data-layer="product_name"]');
             productName.textContent = spec.product_name || "Product Name";
             const productCode = document.querySelector('[data-layer="product_code"]');
@@ -1514,7 +1553,8 @@ export const tShirtSpecification = async (specification, tenantId) => {
         }, specification);
 
         // 結合用のHTMLを作成
-        await page.evaluate((fitContent, materialsContent1, materialsContent2, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
+        checkPageClosed();
+        await safeEvaluate((fitContent, materialsContent1, materialsContent2, tagNoLabelContent, tagLabelContent, carelabelContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
             const combinedHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -1547,6 +1587,7 @@ export const tShirtSpecification = async (specification, tenantId) => {
 
         // 結合されたPDFを生成
         const pdfPath = path.join("/tmp", `${specification.specification_id}.pdf`);
+        checkPageClosed();
         await page.pdf({
             path: pdfPath,
             width: "595px",
@@ -1555,7 +1596,12 @@ export const tShirtSpecification = async (specification, tenantId) => {
             margin: { top: "0mm", bottom: "0mm", left: "0mm", right: "0mm" }
         });
 
-        await browser.close();
+        // ブラウザを適切に閉じる
+        if (browser) {
+            await browser.close();
+            browser = null;
+            page = null;
+        }
 
         // PDFをS3にアップロード
         const uploadParams = {
@@ -1589,6 +1635,19 @@ export const tShirtSpecification = async (specification, tenantId) => {
         return { "statusCode": 200 };
     } catch (error) {
         console.error("Error processing the event:", error);
+        
+        // エラーが発生した場合でもブラウザを適切に閉じる
+        try {
+            if (page && !page.isClosed()) {
+                await page.close();
+            }
+            if (browser) {
+                await browser.close();
+            }
+        } catch (closeError) {
+            console.error("Error closing browser:", closeError);
+        }
+        
         return { "statusCode": 500 };
     }
 }
