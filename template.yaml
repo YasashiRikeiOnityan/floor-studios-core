@@ -896,6 +896,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - dynamodb:GetItem
+                  - dynamodb:PutItem
                 Resource: !GetAtt SpecificationsTable.Arn
               - Effect: Allow
                 Action:
