@@ -119,21 +119,20 @@ export const topsSpecification = async (specification, tenantId) => {
             });
             specification.sample.sample_back.localPath = imagePath;
         }
-        if (specification.custom_fit?.file?.key) {
+        if (specification.fit?.file?.key) {
             const getObjectParams = {
                 Bucket: S3_BUCKET_SPECIFICATIONS,
-                Key: `${tenantId}/${specification.specification_id}/${specification.custom_fit.file.key}`
+                Key: `${tenantId}/${specification.specification_id}/${specification.fit.file.key}`
             };
             const response = await s3.send(new GetObjectCommand(getObjectParams));
-            const imagePath = path.join("/tmp", specification.custom_fit.file.key);
+            const imagePath = path.join("/tmp", specification.fit.file.key);
             const fileStream = fs.createWriteStream(imagePath);
             response.Body.pipe(fileStream);
             await new Promise((resolve, reject) => {
                 fileStream.on("finish", resolve);
                 fileStream.on("error", reject);
             });
-            specification.custom_fit.file.localPath = imagePath;
-            console.info(specification.custom_fit.file.localPath);
+            specification.fit.file.localPath = imagePath;
         }
 
         // Chromiumの実行ファイルの状態を確認
@@ -310,7 +309,7 @@ export const topsSpecification = async (specification, tenantId) => {
                 productCode.textContent = spec.product_code || "";
                 
                 // カスタムフィットデータの設定
-                const customFitData = spec.custom_fit || {};
+                const customFitData = spec.fit || {};
                 const keys = Object.keys(customFitData).filter(key => key !== 'file');
                 
                 // 最大9つのキーを1から順に設定
@@ -346,8 +345,8 @@ export const topsSpecification = async (specification, tenantId) => {
                 
                 // 画像の設定
                 const customFitImage = document.querySelector('[data-layer="customize"]');
-                if (spec.custom_fit?.file?.localPath && customFitImage) {
-                    const imageUrl = spec.custom_fit.file.localPath;
+                if (spec.fit?.file?.localPath && customFitImage) {
+                    const imageUrl = spec.fit.file.localPath;
                     const img = new Image();
                     img.src = imageUrl;
                     await new Promise((resolve) => {
@@ -676,233 +675,445 @@ export const topsSpecification = async (specification, tenantId) => {
             }, specification);
         }
 
-        // sample.html
-        const sampleFilePath = path.resolve(__dirname, "html", "tops", "sample.html");
-        const sampleUrl = "file://" + sampleFilePath;
-        await page.goto(sampleUrl, { waitUntil: "networkidle0", timeout: 30000 });
-        checkPageClosed();
-        const sampleContent = await safeEvaluate(async (spec) => {
-            const productName = document.querySelector('[data-layer="product_name"]');
-            productName.textContent = spec.product_name || "Product Name";
-            const productCode = document.querySelector('[data-layer="product_code"]');
-            productCode.textContent = spec.product_code || "Product Code";
-            const isSample = spec.sample?.is_sample || false;
-            if (isSample) {
-                const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
-                yesRadioOnElements.forEach(element => {
-                    element.style.display = "block";
-                });
-                const yesRadioOffElements = document.querySelectorAll('[data-layer="yes_radio_off"]');
-                yesRadioOffElements.forEach(element => {
-                    element.style.display = "none";
-                });
-                const noRadioOnElements = document.querySelectorAll('[data-layer="no_radio_on"]');
-                noRadioOnElements.forEach(element => {
-                    element.style.display = "none";
-                });
-                const noRadioOffElements = document.querySelectorAll('[data-layer="no_radio_off"]');
-                noRadioOffElements.forEach(element => {
-                    element.style.display = "block";
-                });
-            } else {
-                const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
-                yesRadioOnElements.forEach(element => {
-                    element.style.display = "none";
-                });
-                const yesRadioOffElements = document.querySelectorAll('[data-layer="yes_radio_off"]');
-                yesRadioOffElements.forEach(element => {
-                    element.style.display = "block";
-                });
-                const noRadioOnElements = document.querySelectorAll('[data-layer="no_radio_on"]');
-                noRadioOnElements.forEach(element => {
-                    element.style.display = "block";
-                });
-                const noRadioOffElements = document.querySelectorAll('[data-layer="no_radio_off"]');
-                noRadioOffElements.forEach(element => {
-                    element.style.display = "none";
-                });
-            }
-            if (isSample) {
-                const sampleXxs = document.querySelector('[data-layer="sample_xxs"]');
-                sampleXxs.textContent = spec.sample?.quantity?.xxs || "0";
-                const sampleXs = document.querySelector('[data-layer="sample_xs"]');
-                sampleXs.textContent = spec.sample?.quantity?.xs || "0";
-                const sampleS = document.querySelector('[data-layer="sample_s"]');
-                sampleS.textContent = spec.sample?.quantity?.s || "0";
-                const sampleM = document.querySelector('[data-layer="sample_m"]');
-                sampleM.textContent = spec.sample?.quantity?.m || "0";
-                const sampleL = document.querySelector('[data-layer="sample_l"]');
-                sampleL.textContent = spec.sample?.quantity?.l || "0";
-                const sampleXl = document.querySelector('[data-layer="sample_xl"]');
-                sampleXl.textContent = spec.sample?.quantity?.xl || "0";
-                const sampleXxl = document.querySelector('[data-layer="sample_xxl"]');
-                sampleXxl.textContent = spec.sample?.quantity?.xxl || "0";
-                const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
-                checkBoxOn.style.display = "none";
-                const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
-                checkBoxOff.style.display = "none";
-                const canSendSample = document.querySelector('[data-layer="can_send_sample_text"]');
-                canSendSample.style.display = "none";
-            } else {
-                const canSendSampleText = document.querySelector('[data-layer="can_send_sample_text"]');
-                canSendSampleText.style.display = "block";
-                const sampleXxs = document.querySelector('[data-layer="sample_xxs"]');
-                sampleXxs.style.display = "none";
-                const sampleXs = document.querySelector('[data-layer="sample_xs"]');
-                sampleXs.style.display = "none";
-                const sampleS = document.querySelector('[data-layer="sample_s"]');
-                sampleS.style.display = "none";
-                const sampleM = document.querySelector('[data-layer="sample_m"]');
-                sampleM.style.display = "none";
-                const sampleL = document.querySelector('[data-layer="sample_l"]');
-                sampleL.style.display = "none";
-                const sampleXl = document.querySelector('[data-layer="sample_xl"]');
-                sampleXl.style.display = "none";
-                const sampleXxl = document.querySelector('[data-layer="sample_xxl"]');
-                sampleXxl.style.display = "none";
-                const sampleXxsFrame = document.querySelector('[data-layer="sample_xxs_frame"]');
-                sampleXxsFrame.style.display = "none";
-                const sampleXsFrame = document.querySelector('[data-layer="sample_xs_frame"]');
-                sampleXsFrame.style.display = "none";
-                const sampleSFrame = document.querySelector('[data-layer="sample_s_frame"]');
-                sampleSFrame.style.display = "none";
-                const sampleMFrame = document.querySelector('[data-layer="sample_m_frame"]');
-                sampleMFrame.style.display = "none";
-                const sampleLFrame = document.querySelector('[data-layer="sample_l_frame"]');
-                sampleLFrame.style.display = "none";
-                const sampleXlFrame = document.querySelector('[data-layer="sample_xl_frame"]');
-                sampleXlFrame.style.display = "none";
-                const sampleXxlFrame = document.querySelector('[data-layer="sample_xxl_frame"]');
-                sampleXxlFrame.style.display = "none";
-                const sampleXxsText = document.querySelector('[data-layer="sample_xxs_text"]');
-                sampleXxsText.style.display = "none";
-                const sampleXsText = document.querySelector('[data-layer="sample_xs_text"]');
-                sampleXsText.style.display = "none";
-                const sampleSText = document.querySelector('[data-layer="sample_s_text"]');
-                sampleSText.style.display = "none";
-                const sampleMText = document.querySelector('[data-layer="sample_m_text"]');
-                sampleMText.style.display = "none";
-                const sampleLText = document.querySelector('[data-layer="sample_l_text"]');
-                sampleLText.style.display = "none";
-                const sampleXlText = document.querySelector('[data-layer="sample_xl_text"]');
-                sampleXlText.style.display = "none";
-                const sampleXxlText = document.querySelector('[data-layer="sample_xxl_text"]');
-                sampleXxlText.style.display = "none";
-                if (spec.sample?.can_send_sample) {
-                    const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
-                    checkBoxOn.style.display = "block";
-                    const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
-                    checkBoxOff.style.display = "none";
+        // sample.html (通常用)
+        let sampleContent = undefined;
+        if (specification.type !== "CUSTOMIZE") {
+            const sampleFilePath = path.resolve(__dirname, "html", "tops", "sample.html");
+            const sampleUrl = "file://" + sampleFilePath;
+            await page.goto(sampleUrl, { waitUntil: "networkidle0", timeout: 30000 });
+            checkPageClosed();
+            sampleContent = await safeEvaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || "Product Name";
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || "Product Code";
+                const isSample = spec.sample?.is_sample || false;
+                if (isSample) {
+                    const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
+                    yesRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const yesRadioOffElements = document.querySelectorAll('[data-layer="yes_radio_off"]');
+                    yesRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noRadioOnElements = document.querySelectorAll('[data-layer="no_radio_on"]');
+                    noRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noRadioOffElements = document.querySelectorAll('[data-layer="no_radio_off"]');
+                    noRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
                 } else {
+                    const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
+                    yesRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const yesRadioOffElements = document.querySelectorAll('[data-layer="yes_radio_off"]');
+                    yesRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const noRadioOnElements = document.querySelectorAll('[data-layer="no_radio_on"]');
+                    noRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const noRadioOffElements = document.querySelectorAll('[data-layer="no_radio_off"]');
+                    noRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                }
+                if (isSample) {
+                    const sampleXs = document.querySelector('[data-layer="sample_xs"]');
+                    sampleXs.textContent = spec.sample?.quantity?.xs || "0";
+                    const sampleS = document.querySelector('[data-layer="sample_s"]');
+                    sampleS.textContent = spec.sample?.quantity?.s || "0";
+                    const sampleM = document.querySelector('[data-layer="sample_m"]');
+                    sampleM.textContent = spec.sample?.quantity?.m || "0";
+                    const sampleL = document.querySelector('[data-layer="sample_l"]');
+                    sampleL.textContent = spec.sample?.quantity?.l || "0";
+                    const sampleXl = document.querySelector('[data-layer="sample_xl"]');
+                    sampleXl.textContent = spec.sample?.quantity?.xl || "0";
                     const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
                     checkBoxOn.style.display = "none";
                     const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
-                    checkBoxOff.style.display = "block";
+                    checkBoxOff.style.display = "none";
+                    const canSendSample = document.querySelector('[data-layer="can_send_sample_text"]');
+                    canSendSample.style.display = "none";
+                } else {
+                    const canSendSampleText = document.querySelector('[data-layer="can_send_sample_text"]');
+                    canSendSampleText.style.display = "block";
+                    const sampleXs = document.querySelector('[data-layer="sample_xs"]');
+                    sampleXs.style.display = "none";
+                    const sampleS = document.querySelector('[data-layer="sample_s"]');
+                    sampleS.style.display = "none";
+                    const sampleM = document.querySelector('[data-layer="sample_m"]');
+                    sampleM.style.display = "none";
+                    const sampleL = document.querySelector('[data-layer="sample_l"]');
+                    sampleL.style.display = "none";
+                    const sampleXl = document.querySelector('[data-layer="sample_xl"]');
+                    sampleXl.style.display = "none";
+                    const sampleXsFrame = document.querySelector('[data-layer="sample_xs_frame"]');
+                    sampleXsFrame.style.display = "none";
+                    const sampleSFrame = document.querySelector('[data-layer="sample_s_frame"]');
+                    sampleSFrame.style.display = "none";
+                    const sampleMFrame = document.querySelector('[data-layer="sample_m_frame"]');
+                    sampleMFrame.style.display = "none";
+                    const sampleLFrame = document.querySelector('[data-layer="sample_l_frame"]');
+                    sampleLFrame.style.display = "none";
+                    const sampleXlFrame = document.querySelector('[data-layer="sample_xl_frame"]');
+                    sampleXlFrame.style.display = "none";
+                    const sampleXsText = document.querySelector('[data-layer="sample_xs_text"]');
+                    sampleXsText.style.display = "none";
+                    const sampleSText = document.querySelector('[data-layer="sample_s_text"]');
+                    sampleSText.style.display = "none";
+                    const sampleMText = document.querySelector('[data-layer="sample_m_text"]');
+                    sampleMText.style.display = "none";
+                    const sampleLText = document.querySelector('[data-layer="sample_l_text"]');
+                    sampleLText.style.display = "none";
+                    const sampleXlText = document.querySelector('[data-layer="sample_xl_text"]');
+                    sampleXlText.style.display = "none";
+                    if (spec.sample?.can_send_sample) {
+                        const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                        checkBoxOn.style.display = "block";
+                        const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                        checkBoxOff.style.display = "none";
+                    } else {
+                        const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                        checkBoxOn.style.display = "none";
+                        const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                        checkBoxOff.style.display = "block";
+                    }
                 }
-            }
-            const sampleFront = document.querySelector('[data-layer="sample_front"]');
-            if (spec.sample?.sample_front?.localPath) {
-                const imageUrl = spec.sample.sample_front.localPath;
-                const img = new Image();
-                img.src = imageUrl;
-                await new Promise((resolve) => {
-                    img.onload = () => {
-                        const imageRatio = img.width / img.height;
-                        const maxWidth = 238;
-                        const maxHeight = 138;
-                        if (imageRatio > 1) {
-                            if (maxWidth / imageRatio > maxHeight) {
-                                sampleFront.style.width = `${maxHeight * imageRatio}px`;
-                                sampleFront.style.height = `${maxHeight}px`;
+                const sampleFront = document.querySelector('[data-layer="sample_front"]');
+                if (spec.sample?.sample_front?.localPath) {
+                    const imageUrl = spec.sample.sample_front.localPath;
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 238;
+                            const maxHeight = 138;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    sampleFront.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleFront.style.height = `${maxHeight}px`;
+                                } else {
+                                    sampleFront.style.width = `${maxWidth}px`;
+                                    sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                                }
                             } else {
-                                sampleFront.style.width = `${maxWidth}px`;
-                                sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    sampleFront.style.width = `${maxWidth}px`;
+                                    sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    sampleFront.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleFront.style.height = `${maxHeight}px`;
+                                }
                             }
-                        } else {
-                            if (maxHeight * imageRatio > maxWidth) {
-                                sampleFront.style.width = `${maxWidth}px`;
-                                sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                            sampleFront.style.display = "flex";
+                            sampleFront.style.flexDirection = "column";
+                            sampleFront.style.justifyContent = "flex-end";
+                            sampleFront.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+                const sampleBack = document.querySelector('[data-layer="sample_back"]');
+                if (spec.sample?.sample_back?.localPath) {
+                    const imageUrl = spec.sample.sample_back.localPath;
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 238;
+                            const maxHeight = 138;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    sampleBack.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleBack.style.height = `${maxHeight}px`;
+                                } else {
+                                    sampleBack.style.width = `${maxWidth}px`;
+                                    sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                                }
                             } else {
-                                sampleFront.style.width = `${maxHeight * imageRatio}px`;
-                                sampleFront.style.height = `${maxHeight}px`;
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    sampleBack.style.width = `${maxWidth}px`;
+                                    sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    sampleBack.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleBack.style.height = `${maxHeight}px`;
+                                }
                             }
-                        }
-                        sampleFront.style.display = "flex";
-                        sampleFront.style.flexDirection = "column";
-                        sampleFront.style.justifyContent = "flex-end";
-                        sampleFront.innerHTML = `<img src="${imageUrl}" />`;
-                        resolve();
-                    };
-                });
-            }
-            const sampleBack = document.querySelector('[data-layer="sample_back"]');
-            if (spec.sample?.sample_back?.localPath) {
-                const imageUrl = spec.sample.sample_back.localPath;
-                const img = new Image();
-                img.src = imageUrl;
-                await new Promise((resolve) => {
-                    img.onload = () => {
-                        const imageRatio = img.width / img.height;
-                        const maxWidth = 238;
-                        const maxHeight = 138;
-                        if (imageRatio > 1) {
-                            if (maxWidth / imageRatio > maxHeight) {
-                                sampleBack.style.width = `${maxHeight * imageRatio}px`;
-                                sampleBack.style.height = `${maxHeight}px`;
+                            sampleBack.style.display = "flex";
+                            sampleBack.style.flexDirection = "column";
+                            sampleBack.style.justifyContent = "flex-end";
+                            sampleBack.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+                const deliveryDate = document.querySelector('[data-layer="date"]');
+                deliveryDate.textContent = spec.main_production?.delivery_date || "";
+                if (spec.main_production?.delivery_date) {
+                    const deliveryDateOn = document.querySelectorAll('[data-layer="toggle_on"]');
+                    deliveryDateOn.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const deliveryDateOff = document.querySelectorAll('[data-layer="toggle_off"]');
+                    deliveryDateOff.forEach(element => {
+                        element.style.display = "none";
+                    });
+                } else {
+                    const deliveryDateOn = document.querySelectorAll('[data-layer="toggle_on"]');
+                    deliveryDateOn.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const deliveryDateOff = document.querySelectorAll('[data-layer="toggle_off"]');
+                    deliveryDateOff.forEach(element => {
+                        element.style.display = "block";
+                    });
+                }
+                const mainProductionXs = document.querySelector('[data-layer="main_production_xs"]');
+                mainProductionXs.textContent = spec.main_production?.quantity?.xs || "0";
+                const mainProductionS = document.querySelector('[data-layer="main_production_s"]');
+                mainProductionS.textContent = spec.main_production?.quantity?.s || "0";
+                const mainProductionM = document.querySelector('[data-layer="main_production_m"]');
+                mainProductionM.textContent = spec.main_production?.quantity?.m || "0";
+                const mainProductionL = document.querySelector('[data-layer="main_production_l"]');
+                mainProductionL.textContent = spec.main_production?.quantity?.l || "0";
+                const mainProductionXl = document.querySelector('[data-layer="main_production_xl"]');
+                mainProductionXl.textContent = spec.main_production?.quantity?.xl || "0";
+                return document.documentElement.outerHTML;
+            }, specification);
+        }
+
+        // custom_sample.html (CUSTOMIZE用)
+        let customSampleContent = undefined;
+        if (specification.type === "CUSTOMIZE") {
+            const customSampleFilePath = path.resolve(__dirname, "html", "tops", "custom_sample.html");
+            const customSampleUrl = "file://" + customSampleFilePath;
+            await page.goto(customSampleUrl, { waitUntil: "networkidle0", timeout: 30000 });
+            checkPageClosed();
+            customSampleContent = await safeEvaluate(async (spec) => {
+                const productName = document.querySelector('[data-layer="product_name"]');
+                productName.textContent = spec.product_name || "Product Name";
+                const productCode = document.querySelector('[data-layer="product_code"]');
+                productCode.textContent = spec.product_code || "Product Code";
+                const isSample = spec.sample?.is_sample || false;
+                if (isSample) {
+                    const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
+                    yesRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const yesRadioOffElements = document.querySelectorAll('[data-layer="yes_radio_off"]');
+                    yesRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noRadioOnElements = document.querySelectorAll('[data-layer="no_radio_on"]');
+                    noRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const noRadioOffElements = document.querySelectorAll('[data-layer="no_radio_off"]');
+                    noRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                } else {
+                    const yesRadioOnElements = document.querySelectorAll('[data-layer="yes_radio_on"]');
+                    yesRadioOnElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const yesRadioOffElements = document.querySelectorAll('[data-layer="yes_radio_off"]');
+                    yesRadioOffElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const noRadioOnElements = document.querySelectorAll('[data-layer="no_radio_on"]');
+                    noRadioOnElements.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const noRadioOffElements = document.querySelectorAll('[data-layer="no_radio_off"]');
+                    noRadioOffElements.forEach(element => {
+                        element.style.display = "none";
+                    });
+                }
+                if (isSample) {
+                    const sampleFree = document.querySelector('[data-layer="sample_free"]');
+                    sampleFree.textContent = spec.sample?.quantity?.free || "0";
+                    const sampleXs = document.querySelector('[data-layer="sample_xs"]');
+                    sampleXs.textContent = spec.sample?.quantity?.xs || "0";
+                    const sampleS = document.querySelector('[data-layer="sample_s"]');
+                    sampleS.textContent = spec.sample?.quantity?.s || "0";
+                    const sampleM = document.querySelector('[data-layer="sample_m"]');
+                    sampleM.textContent = spec.sample?.quantity?.m || "0";
+                    const sampleL = document.querySelector('[data-layer="sample_l"]');
+                    sampleL.textContent = spec.sample?.quantity?.l || "0";
+                    const sampleXl = document.querySelector('[data-layer="sample_xl"]');
+                    sampleXl.textContent = spec.sample?.quantity?.xl || "0";
+                    const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                    checkBoxOn.style.display = "none";
+                    const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                    checkBoxOff.style.display = "none";
+                    const canSendSample = document.querySelector('[data-layer="can_send_sample_text"]');
+                    canSendSample.style.display = "none";
+                } else {
+                    const canSendSampleText = document.querySelector('[data-layer="can_send_sample_text"]');
+                    canSendSampleText.style.display = "block";
+                    const sampleFree = document.querySelector('[data-layer="sample_free"]');
+                    sampleFree.style.display = "none";
+                    const sampleXs = document.querySelector('[data-layer="sample_xs"]');
+                    sampleXs.style.display = "none";
+                    const sampleS = document.querySelector('[data-layer="sample_s"]');
+                    sampleS.style.display = "none";
+                    const sampleM = document.querySelector('[data-layer="sample_m"]');
+                    sampleM.style.display = "none";
+                    const sampleL = document.querySelector('[data-layer="sample_l"]');
+                    sampleL.style.display = "none";
+                    const sampleXl = document.querySelector('[data-layer="sample_xl"]');
+                    sampleXl.style.display = "none";
+                    const sampleFreeFrame = document.querySelector('[data-layer="sample_free_frame"]');
+                    sampleFreeFrame.style.display = "none";
+                    const sampleXsFrame = document.querySelector('[data-layer="sample_xs_frame"]');
+                    sampleXsFrame.style.display = "none";
+                    const sampleSFrame = document.querySelector('[data-layer="sample_s_frame"]');
+                    sampleSFrame.style.display = "none";
+                    const sampleMFrame = document.querySelector('[data-layer="sample_m_frame"]');
+                    sampleMFrame.style.display = "none";
+                    const sampleLFrame = document.querySelector('[data-layer="sample_l_frame"]');
+                    sampleLFrame.style.display = "none";
+                    const sampleXlFrame = document.querySelector('[data-layer="sample_xl_frame"]');
+                    sampleXlFrame.style.display = "none";
+                    const sampleFreeText = document.querySelector('[data-layer="sample_free_text"]');
+                    sampleFreeText.style.display = "none";
+                    const sampleXsText = document.querySelector('[data-layer="sample_xs_text"]');
+                    sampleXsText.style.display = "none";
+                    const sampleSText = document.querySelector('[data-layer="sample_s_text"]');
+                    sampleSText.style.display = "none";
+                    const sampleMText = document.querySelector('[data-layer="sample_m_text"]');
+                    sampleMText.style.display = "none";
+                    const sampleLText = document.querySelector('[data-layer="sample_l_text"]');
+                    sampleLText.style.display = "none";
+                    const sampleXlText = document.querySelector('[data-layer="sample_xl_text"]');
+                    sampleXlText.style.display = "none";
+                    if (spec.sample?.can_send_sample) {
+                        const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                        checkBoxOn.style.display = "block";
+                        const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                        checkBoxOff.style.display = "none";
+                    } else {
+                        const checkBoxOn = document.querySelector('[data-layer="check_box_on"]');
+                        checkBoxOn.style.display = "none";
+                        const checkBoxOff = document.querySelector('[data-layer="check_box_off"]');
+                        checkBoxOff.style.display = "block";
+                    }
+                }
+                const sampleFront = document.querySelector('[data-layer="sample_front"]');
+                if (spec.sample?.sample_front?.localPath) {
+                    const imageUrl = spec.sample.sample_front.localPath;
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 238;
+                            const maxHeight = 138;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    sampleFront.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleFront.style.height = `${maxHeight}px`;
+                                } else {
+                                    sampleFront.style.width = `${maxWidth}px`;
+                                    sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                                }
                             } else {
-                                sampleBack.style.width = `${maxWidth}px`;
-                                sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    sampleFront.style.width = `${maxWidth}px`;
+                                    sampleFront.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    sampleFront.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleFront.style.height = `${maxHeight}px`;
+                                }
                             }
-                        } else {
-                            if (maxHeight * imageRatio > maxWidth) {
-                                sampleBack.style.width = `${maxWidth}px`;
-                                sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                            sampleFront.style.display = "flex";
+                            sampleFront.style.flexDirection = "column";
+                            sampleFront.style.justifyContent = "flex-end";
+                            sampleFront.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+                const sampleBack = document.querySelector('[data-layer="sample_back"]');
+                if (spec.sample?.sample_back?.localPath) {
+                    const imageUrl = spec.sample.sample_back.localPath;
+                    const img = new Image();
+                    img.src = imageUrl;
+                    await new Promise((resolve) => {
+                        img.onload = () => {
+                            const imageRatio = img.width / img.height;
+                            const maxWidth = 238;
+                            const maxHeight = 138;
+                            if (imageRatio > 1) {
+                                if (maxWidth / imageRatio > maxHeight) {
+                                    sampleBack.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleBack.style.height = `${maxHeight}px`;
+                                } else {
+                                    sampleBack.style.width = `${maxWidth}px`;
+                                    sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                                }
                             } else {
-                                sampleBack.style.width = `${maxHeight * imageRatio}px`;
-                                sampleBack.style.height = `${maxHeight}px`;
+                                if (maxHeight * imageRatio > maxWidth) {
+                                    sampleBack.style.width = `${maxWidth}px`;
+                                    sampleBack.style.height = `${maxWidth / imageRatio}px`;
+                                } else {
+                                    sampleBack.style.width = `${maxHeight * imageRatio}px`;
+                                    sampleBack.style.height = `${maxHeight}px`;
+                                }
                             }
-                        }
-                        sampleBack.style.display = "flex";
-                        sampleBack.style.flexDirection = "column";
-                        sampleBack.style.justifyContent = "flex-end";
-                        sampleBack.innerHTML = `<img src="${imageUrl}" />`;
-                        resolve();
-                    };
-                });
-            }
-            const deliveryDate = document.querySelector('[data-layer="date"]');
-            deliveryDate.textContent = spec.main_production?.delivery_date || "";
-            if (spec.main_production?.delivery_date) {
-                const deliveryDateOn = document.querySelectorAll('[data-layer="toggle_on"]');
-                deliveryDateOn.forEach(element => {
-                    element.style.display = "block";
-                });
-                const deliveryDateOff = document.querySelectorAll('[data-layer="toggle_off"]');
-                deliveryDateOff.forEach(element => {
-                    element.style.display = "none";
-                });
-            } else {
-                const deliveryDateOn = document.querySelectorAll('[data-layer="toggle_on"]');
-                deliveryDateOn.forEach(element => {
-                    element.style.display = "none";
-                });
-                const deliveryDateOff = document.querySelectorAll('[data-layer="toggle_off"]');
-                deliveryDateOff.forEach(element => {
-                    element.style.display = "block";
-                });
-            }
-            const mainProductionXs = document.querySelector('[data-layer="main_production_xs"]');
-            mainProductionXs.textContent = spec.main_production?.quantity?.xs || "0";
-            const mainProductionS = document.querySelector('[data-layer="main_production_s"]');
-            mainProductionS.textContent = spec.main_production?.quantity?.s || "0";
-            const mainProductionM = document.querySelector('[data-layer="main_production_m"]');
-            mainProductionM.textContent = spec.main_production?.quantity?.m || "0";
-            const mainProductionL = document.querySelector('[data-layer="main_production_l"]');
-            mainProductionL.textContent = spec.main_production?.quantity?.l || "0";
-            const mainProductionXl = document.querySelector('[data-layer="main_production_xl"]');
-            mainProductionXl.textContent = spec.main_production?.quantity?.xl || "0";
-            return document.documentElement.outerHTML;
-        }, specification);
+                            sampleBack.style.display = "flex";
+                            sampleBack.style.flexDirection = "column";
+                            sampleBack.style.justifyContent = "flex-end";
+                            sampleBack.innerHTML = `<img src="${imageUrl}" />`;
+                            resolve();
+                        };
+                    });
+                }
+                const deliveryDate = document.querySelector('[data-layer="date"]');
+                deliveryDate.textContent = spec.main_production?.delivery_date || "";
+                if (spec.main_production?.delivery_date) {
+                    const deliveryDateOn = document.querySelectorAll('[data-layer="toggle_on"]');
+                    deliveryDateOn.forEach(element => {
+                        element.style.display = "block";
+                    });
+                    const deliveryDateOff = document.querySelectorAll('[data-layer="toggle_off"]');
+                    deliveryDateOff.forEach(element => {
+                        element.style.display = "none";
+                    });
+                } else {
+                    const deliveryDateOn = document.querySelectorAll('[data-layer="toggle_on"]');
+                    deliveryDateOn.forEach(element => {
+                        element.style.display = "none";
+                    });
+                    const deliveryDateOff = document.querySelectorAll('[data-layer="toggle_off"]');
+                    deliveryDateOff.forEach(element => {
+                        element.style.display = "block";
+                    });
+                }
+                const mainProductionFree = document.querySelector('[data-layer="main_production_free"]');
+                mainProductionFree.textContent = spec.main_production?.quantity?.free || "0";
+                const mainProductionXs = document.querySelector('[data-layer="main_production_xs"]');
+                mainProductionXs.textContent = spec.main_production?.quantity?.xs || "0";
+                const mainProductionS = document.querySelector('[data-layer="main_production_s"]');
+                mainProductionS.textContent = spec.main_production?.quantity?.s || "0";
+                const mainProductionM = document.querySelector('[data-layer="main_production_m"]');
+                mainProductionM.textContent = spec.main_production?.quantity?.m || "0";
+                const mainProductionL = document.querySelector('[data-layer="main_production_l"]');
+                mainProductionL.textContent = spec.main_production?.quantity?.l || "0";
+                const mainProductionXl = document.querySelector('[data-layer="main_production_xl"]');
+                mainProductionXl.textContent = spec.main_production?.quantity?.xl || "0";
+                return document.documentElement.outerHTML;
+            }, specification);
+        }
         
         // information.html
         const informationFilePath = path.resolve(__dirname, "html", "tops", "information.html");
@@ -965,7 +1176,7 @@ export const topsSpecification = async (specification, tenantId) => {
         
         // 結合用のHTMLを作成
         checkPageClosed();
-        await safeEvaluate((fitContent, customFitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent) => {
+        await safeEvaluate((fitContent, customFitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, customSampleContent, informationContent) => {
             const combinedHtml = `
                 <!DOCTYPE html>
                 <html>
@@ -980,19 +1191,18 @@ export const topsSpecification = async (specification, tenantId) => {
                     </style>
                 </head>
                 <body>
-                    ${fitContent ? `<div class="page">${fitContent}</div>` : ""}
-                    ${customFitContent ? `<div class="page">${customFitContent}</div>` : ""}
+                    <div class="page">${fitContent || customFitContent}</div>
                     <div class="page">${fabricContent}</div>
                     <div class="page">${tagContent}</div>
                     <div class="page">${oemPointsContent}</div>
                     ${oemPointsPlus ? `<div class="page">${oemPointsPlus}</div>` : ""}
-                    <div class="page">${sampleContent}</div>
+                    <div class="page">${sampleContent || customSampleContent}</div>
                     <div class="page">${informationContent}</div>
                 </body>
                 </html>
             `;
             document.documentElement.innerHTML = combinedHtml;
-        }, fitContent, customFitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, informationContent);
+        }, fitContent, customFitContent, fabricContent, tagContent, oemPointsContent, oemPointsPlus, sampleContent, customSampleContent, informationContent);
 
         // PDFを生成
         const pdfPath = path.join("/tmp", `${specification.specification_id}.pdf`);
