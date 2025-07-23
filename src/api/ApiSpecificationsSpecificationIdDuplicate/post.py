@@ -147,19 +147,23 @@ def lambda_handler(event, context):
                 
                 # コピーしたフォルダのうち{specification_id}.pdfを削除
                 pdf_key = f"{tenant_id}/{duplicate_specification_id}/{specification_id}.pdf"
+
                 try:
                     response_s3 = s3.delete_object(
                         Bucket=S3_BUCKET_SPECIFICATIONS,
                         Key=pdf_key
                     )
-                    
+
                     if response_s3.get("ResponseMetadata", {}).get("HTTPStatusCode") != 204:
                         logger.warning(f"Failed to delete PDF file: {pdf_key}")
                         # PDFファイルの削除に失敗してもエラーにはしない
+                        pass
+
                 except Exception as e:
                     logger.warning(f"Exception occurred while deleting PDF file: {e}")
                     # PDFファイルの削除に失敗してもエラーにはしない
-                    
+                    pass
+
         except Exception as e:
             logger.error(f"Failed to copy S3 objects: {e}")
             return utils.get_response_internal_server_error()
