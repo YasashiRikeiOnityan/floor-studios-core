@@ -911,6 +911,7 @@ Resources:
                   - s3:GetObject
                   - s3:DeleteObject
                   - s3:CopyObject
+                  - s3:ListObjectsV2
                 Resource: !Sub ${S3BucketSpecifications.Arn}/*
               - Effect: Allow
                 Action:

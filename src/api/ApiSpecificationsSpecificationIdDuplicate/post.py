@@ -107,25 +107,61 @@ def lambda_handler(event, context):
             logger.error("Failed to insert data into specifications table")
             return utils.get_response_internal_server_error()
         
-        # S3のフォルダを複製
-        response_s3 = s3.copy_object(
-            Bucket=S3_BUCKET_SPECIFICATIONS,
-            CopySource=f"{S3_BUCKET_SPECIFICATIONS}/{tenant_id}/{specification_id}",
-            Key=f"{tenant_id}/{duplicate_specification_id}"
-        )
+        # S3のフォルダ内のすべてのオブジェクトを複製
+        # まず、元のフォルダ内のすべてのオブジェクトをリストアップ
+        paginator = s3.get_paginator('list_objects_v2')
+        source_prefix = f"{tenant_id}/{specification_id}/"
         
-        if response_s3.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
-            logger.error("Failed to copy object from s3")
-            return utils.get_response_internal_server_error()
-        
-        # コピーしたフォルダのうち{specification_id}.pdfを削除
-        response_s3 = s3.delete_object(
-            Bucket=S3_BUCKET_SPECIFICATIONS,
-            Key=f"{tenant_id}/{duplicate_specification_id}/{specification_id}.pdf"
-        )
-        
-        if response_s3.get("ResponseMetadata", {}).get("HTTPStatusCode") != 204:
-            logger.error("Failed to delete object from s3")
+        try:
+            # 元のフォルダ内のオブジェクトをリストアップ
+            source_objects = []
+            for page in paginator.paginate(Bucket=S3_BUCKET_SPECIFICATIONS, Prefix=source_prefix):
+                if 'Contents' in page:
+                    source_objects.extend(page['Contents'])
+            
+            if not source_objects:
+                logger.warning(f"No objects found in source folder: {source_prefix}")
+                # フォルダが空でもエラーにはしない（新規作成の場合など）
+            else:
+                # 各オブジェクトを個別にコピー
+                for obj in source_objects:
+                    source_key = obj['Key']
+                    # 新しいキー名を生成（specification_id部分を新しいIDに置換）
+                    destination_key = source_key.replace(f"{tenant_id}/{specification_id}/", f"{tenant_id}/{duplicate_specification_id}/")
+                    
+                    # オブジェクトをコピー
+                    copy_source = {
+                        'Bucket': S3_BUCKET_SPECIFICATIONS,
+                        'Key': source_key
+                    }
+                    
+                    response_s3 = s3.copy_object(
+                        Bucket=S3_BUCKET_SPECIFICATIONS,
+                        CopySource=copy_source,
+                        Key=destination_key
+                    )
+                    
+                    if response_s3.get("ResponseMetadata", {}).get("HTTPStatusCode") != 200:
+                        logger.error(f"Failed to copy object from s3: {source_key}")
+                        return utils.get_response_internal_server_error()
+                
+                # コピーしたフォルダのうち{specification_id}.pdfを削除
+                pdf_key = f"{tenant_id}/{duplicate_specification_id}/{specification_id}.pdf"
+                try:
+                    response_s3 = s3.delete_object(
+                        Bucket=S3_BUCKET_SPECIFICATIONS,
+                        Key=pdf_key
+                    )
+                    
+                    if response_s3.get("ResponseMetadata", {}).get("HTTPStatusCode") != 204:
+                        logger.warning(f"Failed to delete PDF file: {pdf_key}")
+                        # PDFファイルの削除に失敗してもエラーにはしない
+                except Exception as e:
+                    logger.warning(f"Exception occurred while deleting PDF file: {e}")
+                    # PDFファイルの削除に失敗してもエラーにはしない
+                    
+        except Exception as e:
+            logger.error(f"Failed to copy S3 objects: {e}")
             return utils.get_response_internal_server_error()
         
         # キューにメッセージを送信
