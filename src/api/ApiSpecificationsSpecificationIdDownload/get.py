@@ -11,6 +11,7 @@ s3 = boto3.client("s3")
 #環境変数
 SPECIFICATIONS_TABLE_NAME = os.environ["SPECIFICATIONS_TABLE_NAME"]
 S3_BUCKET_SPECIFICATIONS = os.environ["S3_BUCKET_SPECIFICATIONS"]
+
 # ログの設定
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
